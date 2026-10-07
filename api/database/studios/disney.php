@@ -19,7 +19,7 @@ require_once __DIR__ . '/_helpers.php';
 return [
     'slug' => 'disney',
     'name' => 'Disney Animación',
-    'logo' => ['type' => 'company', 'id' => 2],
+    'logo' => ['type' => 'company', 'id' => 6125], // Walt Disney Animation Studios (2 = Walt Disney Pictures, used by live action)
     'sections' => [
         [
             'slug' => 'golden-age', 'name' => 'Era Dorada', 'period' => '1937-1942',

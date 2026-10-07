@@ -366,10 +366,11 @@ input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px #f
 .studio-card .meter { margin-top: 6px; }
 .studio-progress { color: var(--gold); min-height: 1.3em; }
 .logo-tile {
-  display: grid; place-items: center; height: 96px; padding: 14px; border-radius: 12px;
-  background: #f4f2ff;
+  display: flex; align-items: center; justify-content: center; height: 96px; padding: 14px; border-radius: 12px;
+  background: #f4f2ff; overflow: hidden; box-sizing: border-box;
 }
-.logo-tile img { max-width: 100%; max-height: 100%; object-fit: contain; }
+/* Fill the padded box and letterbox the logo: tall logos (CN, XD, Nickelodeon) must never overflow. */
+.logo-tile img { display: block; width: 100%; height: 100%; min-height: 0; object-fit: contain; }
 .logo-tile.wordmark { background: linear-gradient(135deg, var(--panel-2), var(--line)); }
 .logo-tile.wordmark span { font-family: var(--display); font-weight: 800; font-size: 1.5rem; letter-spacing: -0.02em; color: var(--gold); text-align: center; }
 .sk-logo { height: 96px; border-radius: 12px; }
