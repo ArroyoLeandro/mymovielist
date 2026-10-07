@@ -32,8 +32,8 @@ The friends want a shared, private tracker. Disney (Walt Disney Animation Studio
 
 ## Tasks
 - [x] T1-T3 — Backend (collapsed into one pragmatic layout after scope change): plain PHP front controller, PDO repository, session auth with shared site password, schema.sql, seed.sql with real poster URLs, bin/hash-password.php, bin/fetch-posters.php. Route: delegated (writer trigger). Commit 22865d9 (earlier layered scaffold dc455bd was collapsed).
-- [ ] T4 — Frontend: Vite React TS, login, studio catalog grouped by section with filters/search, watched toggle + score, ranking page, profile "My Movie List". Dark modern design. Vitest + Testing Library. Route: delegated.
-- [ ] T5 — Deployment: build to static files, `.htaccess` (SPA fallback + `/api` front controller), README with setup/deploy. Route: delegated.
+- [x] T4 — Frontend: Vite React TS (login, catalog by section with search/filter/watched/score, ranking, profile), dark UI, no tests (TDD off). Route: delegated (writer trigger). Commit 03a07f3.
+- [x] T5 — Deployment: docker-compose MySQL, deploy/.htaccess + api shim (backend outside web root), deploy/build.sh, README. Route: delegated (writer trigger). Commit c711d6e.
 
 ## Acceptance criteria
 - Without login, no catalog data is reachable (API 401; SPA shows login).
@@ -55,4 +55,6 @@ The friends want a shared, private tracker. Disney (Walt Disney Animation Studio
 - T1-T3 done (22865d9). Smoke test (php -S + SQLite, 91 movies, 8 sections): 401 no session / wrong password, 422 bad tag, 415 no JSON type, login 200 (case-insensitive tag), catalog 200, PUT entry 200/422/404/415, ranking, user list, logout 204 then 401 all as expected. All 91 movies have poster URLs. `php -l`: 0 failures.
 
 ## Next step
-T4 (frontend).
+Orchestrator: MySQL validation in Docker, RDD assessment, then user decides push/PR.
+
+- T4/T5 done (03a07f3, c711d6e). `npm run build` (tsc -b + vite build) passes; `bash deploy/build.sh` assembles build/public + build/disney-app; shim include resolves the real front controller. No browser/MySQL run yet.
