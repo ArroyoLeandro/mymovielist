@@ -2,7 +2,7 @@ node_modules/
 vendor/
 dist/
 .env
-api/config/config.php
+api/config/config.php*
 .phpunit.cache/
 *.log
 build/
