@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useParams } from 'react-router-dom'
 import { api, type Catalog as CatalogData, type Movie } from '../api'
 import { useAuth } from '../auth'
@@ -46,8 +46,10 @@ export default function Catalog() {
     pending.current++
     try {
       await api.saveEntry(movie.id, watched, score)
+      return true
     } catch {
       patch(movie.id, () => movie) // roll back
+      return false
     } finally {
       // Refresh community stats once all in-flight saves are done.
       if (--pending.current === 0) load().catch(() => {})
@@ -100,9 +102,32 @@ export default function Catalog() {
   )
 }
 
+const LABELS = ['Awful', 'Bad', 'Poor', 'Meh', 'Okay', 'Decent', 'Good', 'Great', 'Excellent', 'Masterpiece']
 const tier = (s: number | null) => (s === null ? '' : s <= 4 ? 'low' : s <= 7 ? 'mid' : 'high')
 
-function Card({ movie: m, me, onSave }: { movie: Movie; me?: string; onSave: (m: Movie, watched: boolean, score: number | null) => void }) {
+function Card({ movie: m, me, onSave }: { movie: Movie; me?: string; onSave: (m: Movie, watched: boolean, score: number | null) => Promise<boolean> }) {
+  const [hover, setHover] = useState<number | null>(null)
+  const [failed, setFailed] = useState(false)
+  const group = useRef<HTMLDivElement>(null)
+
+  const rate = async (n: number) => {
+    setHover(null)
+    setFailed(false)
+    if (!(await onSave(m, true, m.score === n ? null : n))) {
+      setFailed(true)
+      setTimeout(() => setFailed(false), 3000)
+    }
+  }
+  const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (/^[0-9]$/.test(e.key)) return void rate(e.key === '0' ? 10 : Number(e.key))
+    const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0
+    if (!step) return
+    e.preventDefault()
+    const btns = Array.from(group.current?.querySelectorAll('button') ?? [])
+    const i = btns.indexOf(document.activeElement as HTMLButtonElement)
+    btns[Math.min(9, Math.max(0, i + step))]?.focus()
+  }
+  const shown = hover ?? m.score
   return (
     <article className={`card ${m.watched ? 'seen' : ''}`}>
       <div className="art">
@@ -118,19 +143,27 @@ function Card({ movie: m, me, onSave }: { movie: Movie; me?: string; onSave: (m:
       </div>
       <h3>{m.title}</h3>
       <p className="year">{m.year}{m.originalTitle ? ` · ${m.originalTitle}` : ''}</p>
-      <div className="scores" role="group" aria-label="Your score">
+      <p className="score-read" aria-live="polite">
+        <strong>{shown ?? '–'}</strong>
+        <span>{shown ? LABELS[shown - 1] : m.watched ? 'No score yet' : 'Tap to rate'}</span>
+      </p>
+      <div className="scores" role="group" aria-label="Your score" ref={group} onKeyDown={onKey} onMouseLeave={() => setHover(null)}>
         {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
           <button
             key={n}
-            disabled={!m.watched}
-            className={m.score === n ? 'on' : ''}
+            className={`${m.score === n ? 'on' : ''} ${shown !== null && n <= shown ? 'fill' : ''}`}
             aria-pressed={m.score === n}
-            onClick={() => onSave(m, true, m.score === n ? null : n)}
+            aria-label={`Rate ${n} of 10: ${LABELS[n - 1]}`}
+            onMouseEnter={() => setHover(n)}
+            onFocus={() => setHover(n)}
+            onBlur={() => setHover(null)}
+            onClick={() => rate(n)}
           >
             {n}
           </button>
         ))}
       </div>
+      {failed && <p className="error small">Could not save. Try again.</p>}
       <p className="community">
         {m.watchersCount === 0 ? 'Nobody yet' : `${m.watchersCount} watched`}
         {m.averageScore !== null && <b>★ {m.averageScore.toFixed(1)}</b>}
