@@ -11,26 +11,6 @@ type Filter = 'all' | 'watched' | 'unwatched'
 type SaveFn = (movieId: number, watched: boolean, score: number | null) => Promise<boolean>
 
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
-const BIG_STUDIO = 150 // above this many titles only the first section starts expanded
-
-// ---- collapsed sections, remembered per studio (storage may be unavailable) ----
-const storageKey = (slug: string) => `catalog-collapsed:${slug}`
-function readCollapsed(slug: string): string[] | null {
-  try {
-    const raw = localStorage.getItem(storageKey(slug))
-    const parsed = raw ? JSON.parse(raw) : null
-    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === 'string') : null
-  } catch {
-    return null
-  }
-}
-function writeCollapsed(slug: string, list: string[]) {
-  try {
-    localStorage.setItem(storageKey(slug), JSON.stringify(list))
-  } catch {
-    /* private mode / blocked storage: state just isn't remembered */
-  }
-}
 
 // ---- optimistic patching of the ratings cache ----
 const byScore = (a: { tag: string; score: number | null }, b: { tag: string; score: number | null }) =>
@@ -117,7 +97,8 @@ function CatalogView({ slug }: { slug: string }) {
 
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
-  const [stored, setStored] = useState<string[] | null>(() => readCollapsed(slug))
+  // Sections always start expanded; collapsing is per visit and resets when the studio changes.
+  const [collapsedState, setCollapsedState] = useState<{ slug: string; list: string[] }>({ slug, list: [] })
 
   const byId = useMemo(() => new Map((ratings.data ?? []).map((r) => [r.movieId, r])), [ratings.data])
   const sections = catalog.data?.sections
@@ -139,12 +120,8 @@ function CatalogView({ slug }: { slug: string }) {
     return (filter === 'all' || (filter === 'watched') === watched) && (!q || haystack.get(m.id)!.includes(q))
   }
 
-  const defaultCollapsed = all.length > BIG_STUDIO ? sections.slice(1).map((s) => s.slug) : []
-  const collapsed = new Set(stored ?? defaultCollapsed)
-  const setCollapsedList = (list: string[]) => {
-    setStored(list)
-    writeCollapsed(slug, list)
-  }
+  const collapsed = new Set(collapsedState.slug === slug ? collapsedState.list : [])
+  const setCollapsedList = (list: string[]) => setCollapsedState({ slug, list })
   const toggle = (sectionSlug: string) => {
     const next = new Set(collapsed)
     if (!next.delete(sectionSlug)) next.add(sectionSlug)
