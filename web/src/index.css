@@ -188,3 +188,11 @@ input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px #f
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
+
+.ratings { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
+.ratings li { font-size: 0.72rem; padding: 2px 7px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); }
+.ratings li b { font-weight: 700; color: var(--text); }
+.ratings li.low b { color: var(--rose); }
+.ratings li.mid b { color: #ffa94d; }
+.ratings li.high b { color: #6ee7a0; }
+.ratings li.me { border-color: var(--gold); color: var(--gold); }

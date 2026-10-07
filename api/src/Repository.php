@@ -101,6 +101,24 @@ final class Repository
             [$userId, $studioId]
         )->fetchAll();
 
+        $rows = $this->run(
+            'SELECT e.movie_id, u.tag, e.score
+             FROM watch_entries e
+             JOIN users u ON u.id = e.user_id
+             JOIN movies m ON m.id = e.movie_id
+             JOIN sections sec ON sec.id = m.section_id
+             WHERE sec.studio_id = ?
+             ORDER BY (e.score IS NULL), e.score DESC, u.tag',
+            [$studioId]
+        )->fetchAll();
+        $ratings = [];
+        foreach ($rows as $r) {
+            $ratings[$r['movie_id']][] = [
+                'tag' => $r['tag'],
+                'score' => $r['score'] === null ? null : (int) $r['score'],
+            ];
+        }
+
         $bySection = [];
         foreach ($movies as $m) {
             $bySection[$m['section_id']][] = [
@@ -113,6 +131,7 @@ final class Repository
                 'score' => $m['my_score'] === null ? null : (int) $m['my_score'],
                 'watchersCount' => (int) $m['watchers_count'],
                 'averageScore' => self::avg($m['average_score']),
+                'ratings' => $ratings[$m['id']] ?? [],
             ];
         }
 

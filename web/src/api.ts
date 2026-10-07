@@ -1,4 +1,5 @@
 export interface User { id: number; tag: string }
+export interface Rating { tag: string; score: number | null }
 export interface Movie {
   id: number
   title: string
@@ -9,6 +10,7 @@ export interface Movie {
   score: number | null
   watchersCount: number
   averageScore: number | null
+  ratings: Rating[]
 }
 export interface Section { slug: string; name: string; period: string; movies: Movie[] }
 export interface Catalog { studio: { slug: string; name: string }; sections: Section[] }

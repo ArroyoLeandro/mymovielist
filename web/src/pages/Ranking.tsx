@@ -7,7 +7,17 @@ export default function Ranking() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    api.ranking().then(setRows).catch((e) => setError(e.message))
+    const load = () => api.ranking().then(setRows)
+    load().catch((e) => setError(e.message))
+    const poll = () => {
+      if (document.visibilityState === 'visible') load().catch(() => {})
+    }
+    const id = setInterval(poll, 15000)
+    document.addEventListener('visibilitychange', poll)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', poll)
+    }
   }, [])
 
   if (error) return <p className="error">{error}</p>
