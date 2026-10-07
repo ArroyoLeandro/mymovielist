@@ -9,7 +9,7 @@ declare(strict_types=1);
  *   php bin/import-tmdb.php --studio=disney [--dry-run]         import/update a studio from database/studios/<slug>.php
  *
  * Other flags: --emit-seed=path (write the resolved rows as SQL), --prune (delete orphaned rows that have no
- * watch entries), --no-cache (skip the 24h response cache in storage/tmdb-cache), --config=path, --verbose.
+ * watch entries), --move (take over rows currently owned by another studio; their ids and watch entries are kept), --no-cache (skip the 24h response cache in storage/tmdb-cache), --config=path, --verbose.
  * Rows with watch entries are never deleted; rows no longer in the definition are reported as "orphaned".
  */
 
@@ -36,7 +36,7 @@ function fail(string $message, int $code = 1): void
     exit($code);
 }
 
-$opts = getopt('', ['studio:', 'dry-run', 'match-existing', 'emit-seed:', 'prune', 'no-cache', 'config:', 'verbose', 'help']);
+$opts = getopt('', ['studio:', 'dry-run', 'match-existing', 'emit-seed:', 'prune', 'move', 'no-cache', 'config:', 'verbose', 'help']);
 if (isset($opts['help']) || (!isset($opts['studio']) && !isset($opts['match-existing']))) {
     say("Usage:\n  php bin/import-tmdb.php --match-existing [--dry-run]\n  php bin/import-tmdb.php --studio=<slug> [--dry-run] [--emit-seed=path] [--prune] [--no-cache] [--verbose]");
     exit(isset($opts['help']) ? 0 : 2);
@@ -161,7 +161,7 @@ function importStudio(PDO $pdo, TmdbClient $tmdb, string $slug, array $opts, boo
         $exclude = array_flip($section['exclude_ids'] ?? []);
         $items = [];
         $skipped = ['dupe' => 0, 'unreleased' => 0, 'missing' => 0];
-        foreach (collectIds($tmdb, $section['source'], $today) as $ref) {
+        foreach (collectSection($tmdb, $section, $today) as $ref) {
             $key = $ref['media'] . ':' . $ref['id'];
             if (isset($exclude[$ref['id']])) {
                 continue;
@@ -238,11 +238,11 @@ function importStudio(PDO $pdo, TmdbClient $tmdb, string $slug, array $opts, boo
             $q = $pdo->prepare('SELECT id FROM sections WHERE studio_id = ? AND slug = ?');
             $q->execute([$studioId, $section['slug']]);
             $sectionId = $q->fetchColumn();
-            if ($sectionId === false && !$dry) {
+            if ($sectionId === false && !$dry && $resolved[$section['slug']]) {
                 $pdo->prepare('INSERT INTO sections (studio_id, slug, name, period, sort_order) VALUES (?, ?, ?, ?, ?)')
                     ->execute([$studioId, $section['slug'], $section['name'], $section['period'] ?? null, $i + 1]);
                 $sectionId = $pdo->lastInsertId();
-            } elseif ($sectionId !== false && !$dry) {
+            } elseif ($sectionId !== false && !$dry && $resolved[$section['slug']]) {
                 $pdo->prepare('UPDATE sections SET name = ?, period = ?, sort_order = ? WHERE id = ?')
                     ->execute([$section['name'], $section['period'] ?? null, $i + 1, $sectionId]);
             }
@@ -255,7 +255,7 @@ function importStudio(PDO $pdo, TmdbClient $tmdb, string $slug, array $opts, boo
             $order = $pos + 1;
             $row = $existing[$key] ?? null;
             $label = sprintf('%s -> %s (%d) poster:%s', $item['original'] ?? $item['title'], $item['title'], $item['year'], $item['poster_country'] ?? ($item['poster'] ? 'none' : 'MISSING'));
-            if ($row !== null && $studioId !== false && (int) $row['studio_id'] !== (int) $studioId) {
+            if ($row !== null && $studioId !== false && (int) $row['studio_id'] !== (int) $studioId && !isset($opts['move'])) {
                 $n['foreign']++;
                 say("  ! owned by another studio, skipped: $label");
                 continue;
@@ -306,6 +306,11 @@ function importStudio(PDO $pdo, TmdbClient $tmdb, string $slug, array $opts, boo
     }
     say(sprintf('Total: new %d, updated %d, unchanged %d.', $totals['new'], $totals['updated'], $totals['same']));
 
+    // Drop sections of this studio that ended up empty (nothing resolved, or everything moved away).
+    if ($studioId !== false && !$dry) {
+        $pdo->prepare('DELETE FROM sections WHERE studio_id = ? AND NOT EXISTS (SELECT 1 FROM movies m WHERE m.section_id = sections.id)')->execute([$studioId]);
+    }
+
     // 3. Orphans: rows in this studio that are no longer in the definition. Never deleted if they have entries.
     if ($studioId !== false) {
         $q = $pdo->prepare(
@@ -333,10 +338,44 @@ function importStudio(PDO $pdo, TmdbClient $tmdb, string $slug, array $opts, boo
     }
 }
 
+/** A section has one 'source' or several 'sources' (merged, first occurrence wins). */
+function collectSection(TmdbClient $tmdb, array $section, string $today): array
+{
+    $refs = [];
+    foreach ($section['sources'] ?? [$section['source']] as $source) {
+        foreach (collectIds($tmdb, $source, $today) as $ref) {
+            $refs[$ref['media'] . ':' . $ref['id']] = $ref;
+        }
+    }
+    return array_values($refs);
+}
+
 /** @return list<array{media: string, id: int}> media is the TMDB path segment: 'movie' or 'tv'. */
 function collectIds(TmdbClient $tmdb, array $source, string $today): array
 {
     $media = $source['media'] === 'tv' ? 'tv' : 'movie';
+    if ($source['type'] === 'collection') {
+        // TMDB collections: released parts only; optional 'genre' (keep only) / 'not_genre' (drop) filters.
+        $refs = [];
+        foreach ($source['ids'] as $cid) {
+            $c = $tmdb->get('/collection/' . (int) $cid, ['language' => 'en-US']);
+            foreach ($c['parts'] ?? [] as $part) {
+                $date = (string) ($part['release_date'] ?? '');
+                $genres = $part['genre_ids'] ?? [];
+                if ($date === '' || $date > $today) {
+                    continue;
+                }
+                if (isset($source['genre']) && !in_array($source['genre'], $genres, true)) {
+                    continue;
+                }
+                if (isset($source['not_genre']) && in_array($source['not_genre'], $genres, true)) {
+                    continue;
+                }
+                $refs[] = ['media' => 'movie', 'id' => (int) $part['id']];
+            }
+        }
+        return $refs;
+    }
     if ($source['type'] === 'ids') {
         return array_map(function ($id) use ($media) {
             return ['media' => $media, 'id' => (int) $id];

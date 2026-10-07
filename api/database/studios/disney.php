@@ -1,6 +1,8 @@
 <?php
 
-// Studio definition for bin/import-tmdb.php.
+// Studio definition for bin/import-tmdb.php. Animation only: live action lives in disney-live-action,
+// Lucasfilm in lucasfilm, Disney XD / Jetix series in disney-xd. Never mix animation (genre 16) and live action in a section.
+//   source also supports ['type' => 'collection', 'ids' => [...], 'genre' => N?, 'not_genre' => N?]; a section may use 'sources' => [...] (merged).
 //   logo:    explicit URL, or ['type' => 'company'|'network', 'id' => N] (resolved to a TMDB logo URL)
 //   source:  ['type' => 'ids', 'media' => 'movie'|'tv', 'ids' => [...]]  (explicit canon list)
 //            ['type' => 'discover', 'media' => 'movie'|'tv', 'params' => [...TMDB discover params...]]
@@ -12,9 +14,11 @@
 // DisneyToon Studios 5391, Disney Channel 240533 (+ Disney Channels Worldwide 241787), Lucasfilm Ltd. 1.
 // TMDB tags WDAS films inconsistently (discover by company 6125 only returns ~18 modern films),
 // so the seven WDAS eras use the explicit canon below (ids resolved with `--match-existing`).
+require_once __DIR__ . '/_helpers.php';
+
 return [
     'slug' => 'disney',
-    'name' => 'Disney',
+    'name' => 'Disney Animación',
     'logo' => ['type' => 'company', 'id' => 2],
     'sections' => [
         [
@@ -56,27 +60,22 @@ return [
             ]],
         ],
         [
-            'slug' => 'live-action', 'name' => 'Live action de Disney', 'period' => '1950-presente',
-            'source' => ['type' => 'discover', 'media' => 'movie', 'params' => [
-                'with_companies' => '2|3166', 'without_genres' => '16,99,10770', 'vote_count.gte' => 50,
-            ]],
-        ],
-        [
             'slug' => 'disneytoon', 'name' => 'DisneyToon Studios', 'period' => '1990-2018',
             'source' => ['type' => 'discover', 'media' => 'movie', 'params' => [
                 'with_companies' => '5391', 'without_genres' => '99,10770',
             ]],
         ],
         [
-            'slug' => 'disney-channel', 'name' => 'Películas de Disney Channel', 'period' => '1997-presente',
+            'slug' => 'animated-tv-movies', 'name' => 'Películas animadas para TV', 'period' => '2000-presente',
             'source' => ['type' => 'discover', 'media' => 'movie', 'params' => [
-                'with_companies' => '240533|241787', 'with_genres' => '10770', 'without_genres' => '99',
+                'with_companies' => '240533|241787', 'with_genres' => '10770,16', 'without_genres' => '99',
             ]],
         ],
         [
-            'slug' => 'lucasfilm', 'name' => 'Lucasfilm', 'period' => '1971-presente',
-            'source' => ['type' => 'discover', 'media' => 'movie', 'params' => [
-                'with_companies' => '1', 'without_genres' => '99,10770', 'vote_count.gte' => 500,
+            // Disney XD / Toon Disney series are claimed by the disney-xd studio (import that first).
+            'slug' => 'animated-series', 'name' => 'Series animadas de Disney', 'period' => '1990-presente',
+            'source' => ['type' => 'discover', 'media' => 'tv', 'params' => [
+                'with_networks' => '54|281', 'with_genres' => '16', 'without_genres' => tv_noise(), 'vote_count.gte' => 20,
             ]],
         ],
     ],
