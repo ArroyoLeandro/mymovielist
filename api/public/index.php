@@ -62,16 +62,22 @@ try {
             Http::noContent();
         }
     } elseif ($path === '/api/studios' && $method === 'GET') {
-        Http::json($repo->studios());
-    } elseif ($method === 'GET' && preg_match('#^/api/studios/([a-z0-9-]+)/movies$#', $path, $m)) {
+        Http::jsonCached($repo->studios()); // static: cacheable
+    } elseif ($path === '/api/me/progress' && $method === 'GET') {
+        Http::json($repo->progress($current['id']));
+    } elseif ($method === 'GET' && preg_match('#^/api/studios/([a-z0-9-]+)/(movies|ratings)$#', $path, $m)) {
         $studio = $repo->studioBySlug($m[1]);
         if ($studio === null) {
             throw new HttpError(404, 'Studio not found.');
         }
-        Http::json([
-            'studio' => ['slug' => $studio['slug'], 'name' => $studio['name']],
-            'sections' => $repo->catalog($studio['id'], $current['id']),
-        ]);
+        if ($m[2] === 'movies') {
+            // Static: titles and posters only, cacheable. Per-user and social data is in /ratings.
+            Http::jsonCached([
+                'studio' => ['slug' => $studio['slug'], 'name' => $studio['name'], 'logoUrl' => $studio['logoUrl']],
+                'sections' => $repo->catalog($studio['id']),
+            ]);
+        }
+        Http::json($repo->ratings($studio['id'], $current['id']));
     } elseif ($method === 'PUT' && preg_match('#^/api/movies/(\d+)/entry$#', $path, $m)) {
         $movieId = (int) $m[1];
         $body = Http::jsonBody();

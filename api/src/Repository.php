@@ -51,15 +51,15 @@ final class Repository
         return $this->user('SELECT id, tag FROM users WHERE id = ?', [$id]);
     }
 
-    /** @return list<array{slug: string, name: string, movieCount: int}> */
+    /** Static (not per-user) list of studios. @return list<array{slug: string, name: string, logoUrl: string|null, movieCount: int}> */
     public function studios(): array
     {
         $rows = $this->run(
-            'SELECT s.slug, s.name, COUNT(m.id) AS movie_count
+            'SELECT s.slug, s.name, s.logo_url, COUNT(m.id) AS movie_count
              FROM studios s
              LEFT JOIN sections sec ON sec.studio_id = s.id
              LEFT JOIN movies m ON m.section_id = sec.id
-             GROUP BY s.id, s.slug, s.name
+             GROUP BY s.id, s.slug, s.name, s.logo_url
              ORDER BY s.name',
             []
         )->fetchAll();
@@ -67,19 +67,42 @@ final class Repository
         return array_map(fn(array $r) => [
             'slug' => $r['slug'],
             'name' => $r['name'],
+            'logoUrl' => $r['logo_url'],
             'movieCount' => (int) $r['movie_count'],
         ], $rows);
     }
 
-    /** @return array{id: int, slug: string, name: string}|null */
-    public function studioBySlug(string $slug): ?array
+    /** How many titles the user has watched per studio (small, per-user). @return list<array{slug: string, watchedCount: int}> */
+    public function progress(int $userId): array
     {
-        $row = $this->run('SELECT id, slug, name FROM studios WHERE slug = ?', [$slug])->fetch();
-        return $row ? ['id' => (int) $row['id'], 'slug' => $row['slug'], 'name' => $row['name']] : null;
+        $rows = $this->run(
+            'SELECT s.slug, COUNT(e.movie_id) AS watched_count
+             FROM studios s
+             LEFT JOIN sections sec ON sec.studio_id = s.id
+             LEFT JOIN movies m ON m.section_id = sec.id
+             LEFT JOIN watch_entries e ON e.movie_id = m.id AND e.user_id = ?
+             GROUP BY s.id, s.slug
+             ORDER BY s.name',
+            [$userId]
+        )->fetchAll();
+
+        return array_map(fn(array $r) => [
+            'slug' => $r['slug'],
+            'watchedCount' => (int) $r['watched_count'],
+        ], $rows);
     }
 
-    /** Sections with movies, plus the given user's watched/score and every user's aggregates. */
-    public function catalog(int $studioId, int $userId): array
+    /** @return array{id: int, slug: string, name: string, logoUrl: string|null}|null */
+    public function studioBySlug(string $slug): ?array
+    {
+        $row = $this->run('SELECT id, slug, name, logo_url FROM studios WHERE slug = ?', [$slug])->fetch();
+        return $row
+            ? ['id' => (int) $row['id'], 'slug' => $row['slug'], 'name' => $row['name'], 'logoUrl' => $row['logo_url']]
+            : null;
+    }
+
+    /** Static catalog: sections with titles. No per-user or social data, so it can be cached. */
+    public function catalog(int $studioId): array
     {
         $sections = $this->run(
             'SELECT id, slug, name, period FROM sections WHERE studio_id = ? ORDER BY sort_order, id',
@@ -87,37 +110,13 @@ final class Repository
         )->fetchAll();
 
         $movies = $this->run(
-            'SELECT m.id, m.section_id, m.title, m.original_title, m.year, m.poster_url,
-                    mine.score AS my_score, (mine.user_id IS NOT NULL) AS watched,
-                    COUNT(e.user_id) AS watchers_count, AVG(e.score) AS average_score
+            'SELECT m.id, m.section_id, m.title, m.original_title, m.year, m.poster_url, m.media_type, m.tmdb_id
              FROM movies m
              JOIN sections sec ON sec.id = m.section_id
-             LEFT JOIN watch_entries e ON e.movie_id = m.id
-             LEFT JOIN watch_entries mine ON mine.movie_id = m.id AND mine.user_id = ?
              WHERE sec.studio_id = ?
-             GROUP BY m.id, m.section_id, m.title, m.original_title, m.year, m.poster_url, m.sort_order,
-                      mine.score, mine.user_id
              ORDER BY m.sort_order, m.id',
-            [$userId, $studioId]
-        )->fetchAll();
-
-        $rows = $this->run(
-            'SELECT e.movie_id, u.tag, e.score
-             FROM watch_entries e
-             JOIN users u ON u.id = e.user_id
-             JOIN movies m ON m.id = e.movie_id
-             JOIN sections sec ON sec.id = m.section_id
-             WHERE sec.studio_id = ?
-             ORDER BY (e.score IS NULL), e.score DESC, u.tag',
             [$studioId]
         )->fetchAll();
-        $ratings = [];
-        foreach ($rows as $r) {
-            $ratings[$r['movie_id']][] = [
-                'tag' => $r['tag'],
-                'score' => $r['score'] === null ? null : (int) $r['score'],
-            ];
-        }
 
         $bySection = [];
         foreach ($movies as $m) {
@@ -127,11 +126,8 @@ final class Repository
                 'originalTitle' => $m['original_title'],
                 'year' => (int) $m['year'],
                 'posterUrl' => $m['poster_url'],
-                'watched' => (bool) $m['watched'],
-                'score' => $m['my_score'] === null ? null : (int) $m['my_score'],
-                'watchersCount' => (int) $m['watchers_count'],
-                'averageScore' => self::avg($m['average_score']),
-                'ratings' => $ratings[$m['id']] ?? [],
+                'mediaType' => $m['media_type'],
+                'tmdbId' => $m['tmdb_id'] === null ? null : (int) $m['tmdb_id'],
             ];
         }
 
@@ -141,6 +137,55 @@ final class Repository
             'period' => $s['period'],
             'movies' => $bySection[$s['id']] ?? [],
         ], $sections);
+    }
+
+    /**
+     * Compact dynamic data for one studio: only titles with at least one entry.
+     * @return list<array{movieId: int, watched: bool, score: int|null, ratings: list<array>, watchersCount: int, averageScore: float|null}>
+     */
+    public function ratings(int $studioId, int $userId): array
+    {
+        $rows = $this->run(
+            'SELECT e.movie_id, e.user_id, u.tag, e.score
+             FROM watch_entries e
+             JOIN users u ON u.id = e.user_id
+             JOIN movies m ON m.id = e.movie_id
+             JOIN sections sec ON sec.id = m.section_id
+             WHERE sec.studio_id = ?
+             ORDER BY e.movie_id, (e.score IS NULL), e.score DESC, u.tag',
+            [$studioId]
+        )->fetchAll();
+
+        $byMovie = [];
+        foreach ($rows as $r) {
+            $id = (int) $r['movie_id'];
+            if (!isset($byMovie[$id])) {
+                $byMovie[$id] = ['movieId' => $id, 'watched' => false, 'score' => null, 'ratings' => [], 'sum' => 0, 'scored' => 0];
+            }
+            $score = $r['score'] === null ? null : (int) $r['score'];
+            $byMovie[$id]['ratings'][] = ['tag' => $r['tag'], 'score' => $score];
+            if ((int) $r['user_id'] === $userId) {
+                $byMovie[$id]['watched'] = true;
+                $byMovie[$id]['score'] = $score;
+            }
+            if ($score !== null) {
+                $byMovie[$id]['sum'] += $score;
+                $byMovie[$id]['scored']++;
+            }
+        }
+
+        $out = [];
+        foreach ($byMovie as $m) {
+            $out[] = [
+                'movieId' => $m['movieId'],
+                'watched' => $m['watched'],
+                'score' => $m['score'],
+                'ratings' => $m['ratings'],
+                'watchersCount' => count($m['ratings']),
+                'averageScore' => $m['scored'] > 0 ? round($m['sum'] / $m['scored'], 2) : null,
+            ];
+        }
+        return $out;
     }
 
     public function movieExists(int $movieId): bool

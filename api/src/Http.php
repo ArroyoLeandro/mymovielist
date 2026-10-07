@@ -30,6 +30,35 @@ final class Http
         exit;
     }
 
+    /**
+     * JSON for static, auth-protected data: strong ETag from the body, `private, no-cache` (always revalidate),
+     * and 304 with an empty body when the client already has this version.
+     * @param mixed $data
+     */
+    public static function jsonCached($data): void
+    {
+        $body = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+        $etag = '"' . md5($body) . '"';
+        // session_start() adds anti-cache headers of its own; replace them.
+        header_remove('Pragma');
+        header_remove('Expires');
+        header('Cache-Control: private, no-cache');
+        header('ETag: ' . $etag);
+
+        foreach (explode(',', (string) ($_SERVER['HTTP_IF_NONE_MATCH'] ?? '')) as $candidate) {
+            // Tolerate weak validators and the "-gzip" suffix some servers append to ETags.
+            $candidate = preg_replace('/^\s*(W\/)?"([^"]*?)(-gzip)?"\s*$/', '"$2"', $candidate);
+            if ($candidate === $etag) {
+                http_response_code(304);
+                exit;
+            }
+        }
+        http_response_code(200);
+        header('Content-Type: application/json; charset=utf-8');
+        echo $body;
+        exit;
+    }
+
     public static function noContent(): void
     {
         http_response_code(204);
