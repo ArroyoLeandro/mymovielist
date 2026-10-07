@@ -1,0 +1,19 @@
+# Local development database only. Credentials here are NOT for production.
+services:
+  mysql:
+    image: mysql:8.4
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root-dev-only
+      MYSQL_DATABASE: disney_catalog
+      MYSQL_USER: disney
+      MYSQL_PASSWORD: disney
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./api/database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./api/database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+
+volumes:
+  mysql-data:

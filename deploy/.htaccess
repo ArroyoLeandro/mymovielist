@@ -1,0 +1,19 @@
+Options -Indexes
+DirectoryIndex index.html
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # API requests go to the PHP shim.
+  RewriteRule ^api(/.*)?$ api/index.php [L]
+
+  # Single page app: anything that is not a real file falls back to index.html.
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+# Never serve dotfiles or config/SQL files if they end up in the web root by mistake.
+<FilesMatch "(^\.(?!well-known)|\.(sql|sh|log)$|config\.php$)">
+  Require all denied
+</FilesMatch>
