@@ -34,6 +34,15 @@ The friends want a shared, private tracker. Disney (Walt Disney Animation Studio
 - [x] T1-T3 — Backend (collapsed into one pragmatic layout after scope change): plain PHP front controller, PDO repository, session auth with shared site password, schema.sql, seed.sql with real poster URLs, bin/hash-password.php, bin/fetch-posters.php. Route: delegated (writer trigger). Commit 22865d9 (earlier layered scaffold dc455bd was collapsed).
 - [x] T4 — Frontend: Vite React TS (login, catalog by section with search/filter/watched/score, ranking, profile), dark UI, no tests (TDD off). Route: delegated (writer trigger). Commit 03a07f3.
 - [x] T5 — Deployment: docker-compose MySQL, deploy/.htaccess + api shim (backend outside web root), deploy/build.sh, README. Route: delegated (writer trigger). Commit c711d6e.
+- [x] T6 — Friends' ratings per movie + polling + one-tap scoring UX. Commits 5a80054, c5faef8. Deployed.
+- [x] T7 — Session lifetime + stale-poll guard. Commits 2480b9d, c356294. Deployed.
+
+### Phase 2 — TMDB catalog (branch `feat/tmdb-catalog`)
+User request (2026-10-07): all Disney studios under `/disney`; every movie (existing + new) uses Latin-American Spanish title and LATAM poster (e.g. Inside Out = "Intensamente", not "Del revés"); skeleton loading states; podium top-3 in ranking; then independent studios with the same criteria: DreamWorks, Sony, Blue Sky, Ghibli, Warner, Universal, Marvel, Cartoon Network, Jetix/Disney XD, Nickelodeon, Disney live-action series.
+- [x] T8 — Skeleton loaders (catalog, ranking, profile) + ranking podium (classic stepped podium, #1 center tallest). Route: delegated (writer trigger). Commit 9ac7393 (UI copy translated to Spanish).
+- [x] T9 — Data model for multi-source catalogs: media type movie/series, `tmdb_id`, per-section source definition; lightweight ratings polling endpoint (big catalogs must not re-download everything every 8 s); catalog UI scales to hundreds of titles (section nav/collapsible, lazy images). TMDB importer `bin/import-tmdb.php` driven by a studio definition file, title/poster resolution LATAM-first (AR alternative title → es-MX → es-ES → original). Route: delegated (writer trigger). Blocked for live run on TMDB API key (user is getting it). Done with live TMDB key: commits 5b7ffb8 (model + importer), c7e11cf (static/ratings/progress endpoints + ETag), cc1b388 (web: scale catalog, studios home, react-query).
+- [ ] T10 — Run import for Disney (WDAS eras, Pixar, Walt Disney Pictures live-action, DisneyToon, Disney Channel movies, Lucasfilm), re-map existing watch entries by tmdb_id, deploy + migrate prod without losing user data.
+- [ ] T11 — Independent studios with the same criteria (scope per studio to confirm for very large catalogs: Warner, Universal, Sony).
 
 ## Acceptance criteria
 - Without login, no catalog data is reachable (API 401; SPA shows login).
