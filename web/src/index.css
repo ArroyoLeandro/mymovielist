@@ -5,8 +5,8 @@
   --line: #2b2859;
   --text: #ede9ff;
   --muted: #9893c8;
-  --gold: #ffc94d;
-  --gold-ink: #2a1d00;
+  --gold: #d4f526; /* brand lime, from the logo */
+  --gold-ink: #1b2200;
   --rose: #ff6b9d;
   --radius: 14px;
   --display: 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif;
@@ -41,11 +41,14 @@ button { cursor: pointer; }
 /* ---------- nav ---------- */
 .nav {
   position: sticky; top: 0; z-index: 10;
-  display: flex; align-items: center; gap: 20px;
-  padding: 12px 20px;
   background: #0b0a1ccc; backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--line);
 }
+/* Header content shares the page width so it lines up with the content below. */
+.nav-inner { max-width: 1240px; margin: 0 auto; padding: 10px 20px; display: flex; align-items: center; gap: 20px; }
+.brand { display: flex; align-items: center; flex-shrink: 0; }
+.brand img { display: block; height: 34px; width: auto; }
+.login-logo { display: block; width: min(280px, 80%); height: auto; margin: 0 auto 4px; }
 .brand, .login h1 {
   font-family: var(--display); font-weight: 800; letter-spacing: -0.02em; text-decoration: none; font-size: 1.3rem;
 }
@@ -68,7 +71,7 @@ button { cursor: pointer; }
 .login-card {
   width: 100%; max-width: 380px; display: grid; gap: 16px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 32px;
-  box-shadow: 0 0 80px #ffc94d14;
+  box-shadow: 0 0 80px #d4f52614;
 }
 .login h1 { font-size: 2.2rem; }
 .login-card p { margin: 0; }
@@ -76,7 +79,7 @@ label { display: grid; gap: 6px; font-weight: 500; font-size: 0.9rem; color: var
 input {
   background: var(--night); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; color: var(--text);
 }
-input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px #ffc94d30; }
+input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px #d4f52630; }
 .primary {
   background: var(--gold); color: var(--gold-ink); border: 0; border-radius: 10px; padding: 11px; font-weight: 700;
 }
@@ -107,7 +110,7 @@ input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px #f
 .poster { display: block; width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: var(--radius); background: var(--panel-2); }
 .poster-empty { display: grid; place-items: center; font-family: var(--display); font-size: 2.4rem; font-weight: 800; color: var(--line); background: linear-gradient(160deg, var(--panel-2), var(--panel)); }
 .card .art { transition: box-shadow 0.2s, transform 0.2s; }
-.card.seen .art { box-shadow: 0 0 0 2px var(--gold), 0 8px 30px #ffc94d30; }
+.card.seen .art { box-shadow: 0 0 0 2px var(--gold), 0 8px 30px #d4f52630; }
 .card:not(.seen) .poster { filter: saturate(0.55) brightness(0.8); }
 .card:not(.seen):hover .poster { filter: none; }
 .check {
@@ -171,7 +174,8 @@ input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px #f
 
 /* ---------- small screens ---------- */
 @media (max-width: 720px) {
-  .nav { flex-wrap: wrap; gap: 8px 12px; padding: 10px 14px; }
+  .nav-inner { flex-wrap: wrap; gap: 8px 12px; padding: 10px 14px; justify-content: space-between; }
+  .brand img { height: 28px; }
   .nav nav { order: 3; flex-basis: 100%; }
   .page { padding: 18px 14px 56px; }
   .toolbar { grid-template-columns: 1fr; }
@@ -197,7 +201,7 @@ input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px #f
 
 /* ---------- podium ---------- */
 .podium {
-  --gold-m: var(--gold); --silver-m: #d5d9f2; --bronze-m: #e49a6a;
+  --gold-m: #ffc94d; /* podium medal stays real gold */ --silver-m: #d5d9f2; --bronze-m: #e49a6a;
   list-style: none; padding: 0; margin: 28px 0 24px;
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 10px;
   max-width: 640px; margin-inline: auto;
@@ -360,7 +364,7 @@ input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px #f
   background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
   transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
-.studio-card:hover { transform: translateY(-3px); border-color: var(--gold); box-shadow: 0 10px 40px #ffc94d1a; }
+.studio-card:hover { transform: translateY(-3px); border-color: var(--gold); box-shadow: 0 10px 40px #d4f5261a; }
 .studio-card h2 { font-size: 1.25rem; margin-top: 6px; }
 .studio-card p { margin: 0; font-size: 0.85rem; }
 .studio-card .meter { margin-top: 6px; }
@@ -398,6 +402,6 @@ input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px #f
 .era .list { margin-bottom: 22px; }
 .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .tag { font-size: 0.68rem; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
-.tag.studio { color: var(--gold); border-color: #ffc94d55; }
+.tag.studio { color: var(--gold); border-color: #d4f52655; }
 .tag.series { color: var(--rose); border-color: #ff7aa855; }
 @media (max-width: 640px) { .profile-filters { margin-inline: -14px; padding: 6px 14px; } }

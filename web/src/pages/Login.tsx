@@ -33,7 +33,7 @@ export default function Login() {
   return (
     <div className="login">
       <form onSubmit={submit} className="login-card">
-        <h1>Movie<span>Nights</span></h1>
+        <h1><img className="login-logo" src="/mymovielist.png" alt="MyMovieList" width="280" height="58" /></h1>
         <p className="muted">Elige tu etiqueta, escribe la contraseña del grupo y empieza a marcar lo que has visto. Una etiqueta nueva crea tu lista.</p>
         <label>
           Tu etiqueta

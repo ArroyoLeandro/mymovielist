@@ -22,13 +22,15 @@ export default function App() {
   return (
     <>
       <header className="nav">
-        <NavLink to="/" className="brand">Movie<span>Nights</span></NavLink>
+        <div className="nav-inner">
+        <NavLink to="/" className="brand" aria-label="MyMovieList, inicio"><img src="/mymovielist.png" alt="MyMovieList" width="163" height="34" /></NavLink>
         <nav>
           <NavLink to="/" end className={({ isActive }) => (isActive || pathname.startsWith('/studio') ? 'active' : '')}>Estudios</NavLink>
           <NavLink to="/ranking">Ranking</NavLink>
           <NavLink to={`/u/${user.tag}`}>Mi lista</NavLink>
         </nav>
         <button className="ghost" onClick={logout} title={`Sesión iniciada como ${user.tag}`}>Cerrar sesión</button>
+        </div>
       </header>
       <main className="page">
         <Routes>

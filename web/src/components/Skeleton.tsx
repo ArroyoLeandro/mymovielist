@@ -91,13 +91,15 @@ export function AppSkeleton() {
   return (
     <>
       <header className="nav" aria-hidden="true">
-        <Sk className="sk-brand" />
-        <nav>
+        <div className="nav-inner">
+          <Sk className="sk-brand" />
+          <nav>
+            <Sk className="sk-pill" />
+            <Sk className="sk-pill" />
+            <Sk className="sk-pill" />
+          </nav>
           <Sk className="sk-pill" />
-          <Sk className="sk-pill" />
-          <Sk className="sk-pill" />
-        </nav>
-        <Sk className="sk-pill" />
+        </div>
       </header>
       <main className="page"><CatalogSkeleton /></main>
     </>
