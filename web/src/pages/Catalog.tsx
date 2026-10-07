@@ -14,9 +14,18 @@ export default function Catalog() {
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
   const pending = useRef(0)
+  const editVersion = useRef(0) // bumped when a local edit starts and when it finishes
   const { user } = useAuth()
 
   const load = useCallback(() => api.catalog(slug).then(setData), [slug])
+
+  // Like load, but drops the response if a local edit started/finished meanwhile or a save is pending.
+  const refresh = useCallback(() => {
+    const version = editVersion.current
+    return api.catalog(slug).then((d) => {
+      if (pending.current === 0 && editVersion.current === version) setData(d)
+    })
+  }, [slug])
 
   useEffect(() => {
     setData(null)
@@ -24,10 +33,10 @@ export default function Catalog() {
     load().catch((e) => setError(e.message))
   }, [load])
 
-  // Background refresh; skipped while a save is in flight so optimistic edits are not clobbered.
+  // Background refresh; stale responses are discarded so optimistic edits are not clobbered.
   useEffect(() => {
     const poll = () => {
-      if (document.visibilityState === 'visible' && pending.current === 0) load().catch(() => {})
+      if (document.visibilityState === 'visible' && pending.current === 0) refresh().catch(() => {})
     }
     const id = setInterval(poll, 8000)
     document.addEventListener('visibilitychange', poll)
@@ -35,7 +44,7 @@ export default function Catalog() {
       clearInterval(id)
       document.removeEventListener('visibilitychange', poll)
     }
-  }, [load])
+  }, [refresh])
 
   const patch = (id: number, fn: (m: Movie) => Movie) =>
     setData((d) => d && { ...d, sections: d.sections.map((s) => ({ ...s, movies: s.movies.map((m) => (m.id === id ? fn(m) : m)) })) })
@@ -44,15 +53,19 @@ export default function Catalog() {
     const delta = Number(watched) - Number(movie.watched)
     patch(movie.id, (m) => ({ ...m, watched, score, watchersCount: m.watchersCount + delta }))
     pending.current++
+    editVersion.current++
     try {
-      await api.saveEntry(movie.id, watched, score)
+      const entry = await api.saveEntry(movie.id, watched, score)
+      // Server is the source of truth, unless a newer save for this session is still in flight.
+      if (pending.current === 1) patch(movie.id, (m) => ({ ...m, watched: entry.watched, score: entry.score }))
       return true
     } catch {
       patch(movie.id, () => movie) // roll back
       return false
     } finally {
       // Refresh community stats once all in-flight saves are done.
-      if (--pending.current === 0) load().catch(() => {})
+      editVersion.current++
+      if (--pending.current === 0) refresh().catch(() => {})
     }
   }
 
