@@ -274,20 +274,52 @@ input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px #f
 
 /* ---------- sections: sticky chips, collapsible headers ---------- */
 :root { --nav-h: 58px; }
-.chips {
+.chips-bar {
   position: sticky; top: var(--nav-h); z-index: 9;
-  display: flex; gap: 8px; overflow-x: auto; scrollbar-width: thin;
-  margin: 12px -20px 0; padding: 10px 20px;
+  display: flex; align-items: center; gap: 8px;
+  margin: 12px -20px 0; padding: 8px 20px;
   background: #0b0a1cee; backdrop-filter: blur(10px); border-bottom: 1px solid var(--line);
 }
+.chips-wrap { position: relative; flex: 1; min-width: 0; }
+.chips {
+  display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none;
+  overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch;
+}
+.chips::-webkit-scrollbar { display: none; }
+.chips-wrap[data-left="true"] .chips { -webkit-mask-image: linear-gradient(90deg, transparent, #000 28px); mask-image: linear-gradient(90deg, transparent, #000 28px); }
+.chips-wrap[data-right="true"] .chips { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
+.chips-wrap[data-left="true"][data-right="true"] .chips { -webkit-mask-image: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
 .chips button {
   flex: none; background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
-  padding: 5px 12px; color: var(--muted); font-size: 0.85rem; white-space: nowrap;
+  padding: 4px 11px; color: var(--muted); font-size: 0.82rem; white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
 .chips button:hover { color: var(--text); border-color: var(--muted); }
-.chips small { color: var(--gold); margin-left: 4px; }
-.chips .chips-toggle { margin-left: auto; background: none; }
-.era { scroll-margin-top: calc(var(--nav-h) + 58px); }
+.chips button.on { color: var(--gold-ink); background: var(--gold); border-color: var(--gold); font-weight: 600; }
+.chips small { color: var(--gold); margin-left: 3px; }
+.chips button.on small { color: var(--gold-ink); opacity: 0.75; }
+.chips-toggle {
+  flex: none; background: none; border: 1px solid var(--line); border-radius: 999px;
+  padding: 4px 11px; color: var(--muted); font-size: 0.82rem; cursor: pointer;
+}
+.chips-toggle:hover { color: var(--text); border-color: var(--muted); }
+.chips-arrow {
+  display: none; position: absolute; top: 50%; z-index: 1; width: 26px; height: 26px; margin-top: -13px; padding: 0;
+  border-radius: 50%; border: 1px solid var(--line); background: var(--panel-2); cursor: pointer; opacity: 0; pointer-events: none;
+  transition: opacity 0.15s;
+}
+.chips-arrow::after {
+  content: ''; position: absolute; top: 50%; left: 50%; width: 6px; height: 6px;
+  border-right: 2px solid var(--text); border-bottom: 2px solid var(--text);
+}
+.chips-arrow.left { left: 0; } .chips-arrow.left::after { transform: translate(-30%, -50%) rotate(135deg); }
+.chips-arrow.right { right: 0; } .chips-arrow.right::after { transform: translate(-70%, -50%) rotate(-45deg); }
+.chips-arrow:hover { border-color: var(--gold); }
+@media (hover: hover) and (pointer: fine) {
+  .chips-arrow { display: block; }
+  .chips-wrap[data-left="true"] .chips-arrow.left, .chips-wrap[data-right="true"] .chips-arrow.right { opacity: 1; pointer-events: auto; }
+}
+.era { scroll-margin-top: calc(var(--nav-h) + 56px); }
 .era h2 { padding: 0; }
 .era-toggle {
   display: flex; align-items: baseline; gap: 4px; width: 100%; text-align: left;
@@ -327,7 +359,7 @@ input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px #f
 
 @media (max-width: 720px) {
   :root { --nav-h: 96px; }
-  .chips { margin-inline: -14px; padding-inline: 14px; }
+  .chips-bar { margin-inline: -14px; padding: 6px 14px; }
   .studios { grid-template-columns: repeat(2, 1fr); gap: 12px; }
   .logo-tile { height: 72px; }
   .logo-tile.wordmark span { font-size: 1.15rem; }

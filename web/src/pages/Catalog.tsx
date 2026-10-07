@@ -4,6 +4,7 @@ import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/
 import { api, type Movie, type RatingRow } from '../api'
 import { useAuth } from '../auth'
 import Poster from '../components/Poster'
+import SectionNav from '../components/SectionNav'
 import { CatalogSkeleton } from '../components/Skeleton'
 import { useCatalog } from '../queries'
 
@@ -157,14 +158,13 @@ function CatalogView({ slug }: { slug: string }) {
       </div>
 
       {sections.length > 1 && (
-        <nav className="chips" aria-label="Secciones">
-          {sections.map((s) => (
-            <button key={s.slug} onClick={() => jump(s.slug)} title={s.period}>{s.name} <small>{s.movies.length}</small></button>
-          ))}
-          <button className="chips-toggle" onClick={() => setCollapsedList(allCollapsed ? [] : sections.map((s) => s.slug))}>
-            {allCollapsed ? 'Expandir todo' : 'Contraer todo'}
-          </button>
-        </nav>
+        <SectionNav
+          sections={sections.map((s) => ({ slug: s.slug, name: s.name, period: s.period, count: s.movies.length }))}
+          visibleSlugs={shown.map((x) => x.s.slug)}
+          allCollapsed={allCollapsed}
+          onJump={jump}
+          onToggleAll={() => setCollapsedList(allCollapsed ? [] : sections.map((s) => s.slug))}
+        />
       )}
 
       {shown.map(({ s, movies }) => {
