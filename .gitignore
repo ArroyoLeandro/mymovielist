@@ -6,3 +6,4 @@ api/config/config.php
 .phpunit.cache/
 *.log
 build/
+api/storage/
