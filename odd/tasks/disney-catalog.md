@@ -57,5 +57,7 @@ The friends want a shared, private tracker. Disney (Walt Disney Animation Studio
 - T4/T5 done (03a07f3, c711d6e). `npm run build` (tsc -b + vite build) passes; `bash deploy/build.sh` assembles build/public + build/disney-app; shim include resolves the real front controller.
 - Orchestrator validation on MySQL 8.4 (Docker): schema+seed load clean (91 movies, 8 sections, 0 missing posters, accents OK); API smoke test against MySQL OK (login, PUT entry, ranking, user list, catalog). Full local stack via `docker compose` + `php -S` + Vite proxy: SPA 200, `/api/session` 401 → login 200, catalog 200.
 
+- T6 done (route: delegated; 5a80054 ratings+polling, c5faef8 scoring UX). php -l OK on Repository.php and index.php (php:7.4-cli); npm run build passes.
+
 ## Next step
 User tests in the browser locally. Then deploy to Hostinger subdomain via MCP (pending explicit user request + subdomain). RDD review deferred: user asked for speed and validation at the end.
