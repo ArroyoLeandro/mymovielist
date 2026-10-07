@@ -75,3 +75,19 @@ php bin/import-tmdb.php --studio=all --prune            # delete titles below th
 ```
 
 Thresholds: movies >= 500 TMDB votes, series >= 100 (override with `min_votes` on a studio, section or source). Never filtered nor pruned: titles with watch entries (or any table with a `movie_id` column), `api/database/studios/always-keep.php`, and sections with `'keep_all' => true` (the WDAS canon). Sagas come from TMDB `belongs_to_collection` plus the manual `api/database/studios/franchises.php` (mainly series); a saga in the UI is any collection with 2+ titles in the studio.
+
+### Anime, Series, Películas and studio order (migration 004)
+
+Apply `api/database/migrations/004_studio_order.sql` once (adds `studios.sort_order` and `studios.kind`; re-runnable). Display order and kind (`studio` or `category`) per studio live in `api/database/studios/studio-order.php` and are written by the importer. Three catch-all categories complete the catalog and are always imported after the studios, so a title already owned by a studio is never duplicated:
+
+- `anime`: Japanese animation, sections by era; series >= 200 votes (>= 100 if aired before 2005), movies >= 500, without Studio Ghibli.
+- `series`: live-action series >= 1000 votes, sections by primary genre.
+- `peliculas`: live-action movies >= 5000 votes, sections by primary genre; sagas come from TMDB collections.
+
+```bash
+cd api
+php bin/import-tmdb.php --studio=anime --dry-run
+php bin/import-tmdb.php --studio=all     # studios first (disney-xd leads), then anime, series, peliculas
+```
+
+Spanish saga names: the importer asks TMDB for the es-MX collection name (then any Spanish translation, then the original); fixes go in `api/database/studios/saga-names.php` (`collection:<tmdb id>` or franchise slug).
