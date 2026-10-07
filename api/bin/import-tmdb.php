@@ -8,8 +8,13 @@ declare(strict_types=1);
  *   php bin/import-tmdb.php --match-existing [--dry-run]        link seeded rows (tmdb_id NULL) to TMDB ids
  *   php bin/import-tmdb.php --studio=disney [--dry-run]         import/update a studio from database/studios/<slug>.php
  *
- * Other flags: --emit-seed=path (write the resolved rows as SQL), --prune (delete orphaned rows that have no
- * watch entries), --move (take over rows currently owned by another studio; their ids and watch entries are kept), --no-cache (skip the 24h response cache in storage/tmdb-cache), --config=path, --verbose.
+ * --studio=all imports every studio file (disney-xd first). Curation: titles below the vote thresholds (movies 500,
+ * series 100 by default; override with min_votes on a studio/section/source, or keep_all => true on a section) are not
+ * imported, except protected ones (referenced by watch entries or any other table with a movie_id, listed in
+ * database/studios/always-keep.php, or in a keep_all section). --prune deletes the unprotected rows left over.
+ * Sagas: movies take collection_id from TMDB belongs_to_collection; database/studios/franchises.php adds manual franchises.
+ * Other flags: --emit-seed=path (write the resolved rows as SQL), --prune (delete orphaned rows that are not
+ * protected; with --dry-run it only reports), --move (take over rows currently owned by another studio; their ids and watch entries are kept), --no-cache (skip the 24h response cache in storage/tmdb-cache), --config=path, --verbose.
  * Rows with watch entries are never deleted; rows no longer in the definition are reported as "orphaned".
  */
 
@@ -24,6 +29,8 @@ require __DIR__ . '/../src/TmdbResolver.php';
 if (PHP_SAPI !== 'cli') {
     exit("CLI only.\n");
 }
+
+const DEFAULT_MIN_VOTES = ['movie' => 500, 'tv' => 100];
 
 function say(string $line = ''): void
 {
@@ -65,7 +72,22 @@ try {
     if (isset($opts['match-existing'])) {
         matchExisting($pdo, $tmdb, $dry);
     } else {
-        importStudio($pdo, $tmdb, preg_replace('/[^a-z0-9-]/', '', (string) $opts['studio']), $opts, $dry, $verbose);
+        $slugs = [preg_replace('/[^a-z0-9-]/', '', (string) $opts['studio'])];
+        if ($slugs[0] === 'all') {
+            $slugs = array_map(function ($f) {
+                return basename($f, '.php');
+            }, glob(__DIR__ . '/../database/studios/*.php'));
+            $slugs = array_values(array_filter($slugs, function ($s) {
+                return $s[0] !== '_' && !in_array($s, ['title-overrides', 'always-keep', 'franchises'], true);
+            }));
+            usort($slugs, function ($a, $b) {
+                return [$a !== 'disney-xd', $a] <=> [$b !== 'disney-xd', $b]; // disney-xd claims its series first
+            });
+        }
+        foreach ($slugs as $one) {
+            say("\n=== $one ===");
+            importStudio($pdo, $tmdb, $one, $opts, $dry, $verbose);
+        }
     }
     say(sprintf('Done (%d TMDB requests%s).', $tmdb->requests, $dry ? ', dry run: nothing written' : ''));
 } catch (PDOException $e) {
@@ -152,7 +174,34 @@ function importStudio(PDO $pdo, TmdbClient $tmdb, string $slug, array $opts, boo
     }
     $def = require $file;
     $overrides = require __DIR__ . '/../database/studios/title-overrides.php';
+    $always = array_flip(require __DIR__ . '/../database/studios/always-keep.php');
+    $franchises = require __DIR__ . '/../database/studios/franchises.php';
     $today = date('Y-m-d');
+
+    // Protected rows (never filtered by votes, never pruned): referenced by watch entries or any other table with a
+    // movie_id (watchlist, recommendations...), plus the always-keep list. Keys use the TMDB path: 'movie:<id>' / 'tv:<id>'.
+    $referenced = referencedMovieIds($pdo);
+    $prot = $always;
+    foreach ($pdo->query('SELECT id, media_type, tmdb_id FROM movies WHERE tmdb_id IS NOT NULL')->fetchAll() as $r) {
+        if (isset($referenced[(int) $r['id']])) {
+            $prot[($r['media_type'] === 'series' ? 'tv' : 'movie') . ':' . $r['tmdb_id']] = true;
+        }
+    }
+    $beforeCount = 0;
+    $studioRow = $pdo->prepare('SELECT id FROM studios WHERE slug = ?');
+    $studioRow->execute([$def['slug']]);
+    $beforeStudioId = $studioRow->fetchColumn();
+    if ($beforeStudioId !== false) {
+        $c = $pdo->prepare('SELECT COUNT(*) FROM movies m JOIN sections sec ON sec.id = m.section_id WHERE sec.studio_id = ?');
+        $c->execute([$beforeStudioId]);
+        $beforeCount = (int) $c->fetchColumn();
+    }
+    $protectedBelow = []; // protected titles under the vote threshold (kept)
+    $lowVotes = [];       // 'media:id' => [votes, popularity] for titles filtered out by the threshold
+    $defaultMin = [];
+    foreach (['movie', 'tv'] as $mt) {
+        $defaultMin[$mt] = (int) ($def['min_votes_' . $mt] ?? $def['min_votes'] ?? DEFAULT_MIN_VOTES[$mt]);
+    }
 
     // 1. Resolve every section's titles from TMDB (each title appears in the first section that claims it).
     $seen = [];
@@ -160,7 +209,7 @@ function importStudio(PDO $pdo, TmdbClient $tmdb, string $slug, array $opts, boo
     foreach ($def['sections'] as $section) {
         $exclude = array_flip($section['exclude_ids'] ?? []);
         $items = [];
-        $skipped = ['dupe' => 0, 'unreleased' => 0, 'missing' => 0];
+        $skipped = ['dupe' => 0, 'unreleased' => 0, 'missing' => 0, 'lowvotes' => 0];
         foreach (collectSection($tmdb, $section, $today) as $ref) {
             $key = $ref['media'] . ':' . $ref['id'];
             if (isset($exclude[$ref['id']])) {
@@ -170,7 +219,6 @@ function importStudio(PDO $pdo, TmdbClient $tmdb, string $slug, array $opts, boo
                 $skipped['dupe']++;
                 continue;
             }
-            $seen[$key] = true;
             $d = fetchDetails($tmdb, $ref['media'], $ref['id']);
             if ($d === null) {
                 $skipped['missing']++;
@@ -181,6 +229,19 @@ function importStudio(PDO $pdo, TmdbClient $tmdb, string $slug, array $opts, boo
                 $skipped['unreleased']++;
                 continue;
             }
+            // Curation: vote threshold (source > section > studio > default), unless the title is protected.
+            $votes = (int) ($d['vote_count'] ?? 0);
+            $min = (int) ($ref['min_votes'] ?? $section['min_votes'] ?? $defaultMin[$ref['media']]);
+            $why = isset($always[$key]) ? 'always-keep' : (isset($prot[$key]) ? 'referenced' : (!empty($section['keep_all']) ? 'canon' : null));
+            if ($votes < $min) {
+                if ($why === null) {
+                    $skipped['lowvotes']++;
+                    $lowVotes[$key] = [$votes, (float) ($d['popularity'] ?? 0)];
+                    continue;
+                }
+                $protectedBelow[] = sprintf('%s "%s" (%s) votes:%d < %d [%s]', $key, $d[$ref['media'] === 'tv' ? 'name' : 'title'] ?? '?', substr($date, 0, 4), $votes, $min, $why);
+            }
+            $seen[$key] = true;
             $title = TmdbResolver::title($d, $ref['media'], $overrides);
             $original = trim((string) ($d[$ref['media'] === 'tv' ? 'original_name' : 'original_title'] ?? ''));
             $poster = TmdbResolver::poster($d);
@@ -191,6 +252,9 @@ function importStudio(PDO $pdo, TmdbClient $tmdb, string $slug, array $opts, boo
                 'original' => ($original !== '' && $original !== $title) ? $original : null,
                 'year' => (int) substr($date, 0, 4),
                 'date' => $date,
+                'votes' => $votes,
+                'popularity' => number_format((float) ($d['popularity'] ?? 0), 3, '.', ''),
+                'collection' => $ref['media'] === 'movie' ? (int) ($d['belongs_to_collection']['id'] ?? 0) : 0,
                 'poster' => $poster['url'],
                 'poster_country' => $poster['country'],
             ];
@@ -199,7 +263,7 @@ function importStudio(PDO $pdo, TmdbClient $tmdb, string $slug, array $opts, boo
             return [$a['date'], $a['title']] <=> [$b['date'], $b['title']];
         });
         $resolved[$section['slug']] = $items;
-        say(sprintf('[%s] %d titles (skipped: %d duplicates, %d unreleased, %d not found)', $section['slug'], count($items), $skipped['dupe'], $skipped['unreleased'], $skipped['missing']));
+        say(sprintf('[%s] %d titles (skipped: %d duplicates, %d unreleased, %d not found, %d below vote threshold)', $section['slug'], count($items), $skipped['dupe'], $skipped['unreleased'], $skipped['missing'], $skipped['lowvotes']));
     }
 
     $logo = resolveLogo($tmdb, $def['logo'] ?? null);
@@ -222,14 +286,15 @@ function importStudio(PDO $pdo, TmdbClient $tmdb, string $slug, array $opts, boo
     // Existing rows by (media, tmdb) across the whole DB, with the owning studio.
     $existing = [];
     $stmt = $pdo->query(
-        'SELECT m.id, m.media_type, m.tmdb_id, m.title, m.original_title, m.year, m.poster_url, m.sort_order,
-                m.section_id, sec.slug AS section_slug, sec.studio_id
+        'SELECT m.id, m.media_type, m.tmdb_id, m.title, m.original_title, m.year, m.release_date, m.vote_count, m.popularity,
+                m.collection_id, m.poster_url, m.sort_order, m.section_id, sec.slug AS section_slug, sec.studio_id
          FROM movies m JOIN sections sec ON sec.id = m.section_id WHERE m.tmdb_id IS NOT NULL'
     );
     foreach ($stmt->fetchAll() as $r) {
         $existing[$r['media_type'] . ':' . $r['tmdb_id']] = $r;
     }
 
+    $franchiseOf = franchiseMap($franchises);
     $keep = [];
     $totals = ['new' => 0, 'updated' => 0, 'same' => 0, 'foreign' => 0];
     foreach ($def['sections'] as $i => $section) {
@@ -254,6 +319,7 @@ function importStudio(PDO $pdo, TmdbClient $tmdb, string $slug, array $opts, boo
             $key = $item['media'] . ':' . $item['tmdb'];
             $order = $pos + 1;
             $row = $existing[$key] ?? null;
+            $collectionId = ensureCollection($pdo, $tmdb, $item, $franchiseOf, $franchises, $dry);
             $label = sprintf('%s -> %s (%d) poster:%s', $item['original'] ?? $item['title'], $item['title'], $item['year'], $item['poster_country'] ?? ($item['poster'] ? 'none' : 'MISSING'));
             if ($row !== null && $studioId !== false && (int) $row['studio_id'] !== (int) $studioId && !isset($opts['move'])) {
                 $n['foreign']++;
@@ -267,13 +333,15 @@ function importStudio(PDO $pdo, TmdbClient $tmdb, string $slug, array $opts, boo
                     say("  + [{$section['slug']}] $label");
                 }
                 if (!$dry) {
-                    $pdo->prepare('INSERT INTO movies (section_id, media_type, tmdb_id, title, original_title, year, poster_url, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-                        ->execute([$sectionId, $item['media'], $item['tmdb'], $item['title'], $item['original'], $item['year'], $item['poster'], $order]);
+                    $pdo->prepare('INSERT INTO movies (section_id, media_type, tmdb_id, title, original_title, year, release_date, vote_count, popularity, collection_id, poster_url, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+                        ->execute([$sectionId, $item['media'], $item['tmdb'], $item['title'], $item['original'], $item['year'], $item['date'], $item['votes'], $item['popularity'], $collectionId, $item['poster'], $order]);
                 }
                 continue;
             }
             $changes = [];
-            foreach (['title' => 'title', 'original' => 'original_title', 'year' => 'year', 'poster' => 'poster_url'] as $k => $col) {
+            $item['collection_id'] = $collectionId;
+            foreach (['title' => 'title', 'original' => 'original_title', 'year' => 'year', 'date' => 'release_date', 'votes' => 'vote_count',
+                      'popularity' => 'popularity', 'collection_id' => 'collection_id', 'poster' => 'poster_url'] as $k => $col) {
                 if ((string) $item[$k] !== (string) $row[$col]) {
                     $changes[$col] = $item[$k];
                 }
@@ -322,12 +390,42 @@ function importStudio(PDO $pdo, TmdbClient $tmdb, string $slug, array $opts, boo
         $orphans = array_filter($q->fetchAll(), function ($r) use ($keep) {
             return $r['tmdb_id'] === null || !isset($keep[$r['media_type'] . ':' . $r['tmdb_id']]);
         });
-        say(count($orphans) . ' orphaned rows (in DB but not in the definition).');
+        say(count($orphans) . ' orphaned rows (in DB but not in the definition or below the vote threshold).');
+        $deleted = 0;
         foreach ($orphans as $r) {
-            $deletable = (int) $r['entries'] === 0 && isset($opts['prune']);
-            say(sprintf('  orphaned #%d [%s] "%s" (%d) tmdb:%s entries:%d%s', $r['id'], $r['section_slug'], $r['title'], $r['year'], $r['tmdb_id'] ?? 'NULL', $r['entries'], $deletable ? ' -> deleted' : ''));
+            $rk = ($r['media_type'] === 'series' ? 'tv' : 'movie') . ':' . $r['tmdb_id'];
+            $lv = $lowVotes[$rk] ?? null;
+            $protectedRow = isset($referenced[(int) $r['id']]) || isset($always[$rk]);
+            $deletable = !$protectedRow && isset($opts['prune']);
+            if ($deletable) {
+                $deleted++;
+            }
+            if ($lv !== null && !$protectedRow && !$deletable && !$verbose) {
+                continue; // below-threshold rows are only listed on --verbose / --dry-run / --prune
+            }
+            say(sprintf('  orphaned #%d [%s] "%s" (%d) tmdb:%s%s%s%s', $r['id'], $r['section_slug'], $r['title'], $r['year'], $r['tmdb_id'] ?? 'NULL',
+                $lv !== null ? " votes:{$lv[0]}" : '', $protectedRow ? ' PROTECTED' : '', $deletable ? ' -> ' . ($dry ? 'would delete' : 'deleted') : ''));
             if ($deletable && !$dry) {
                 $pdo->prepare('DELETE FROM movies WHERE id = ?')->execute([$r['id']]);
+            }
+        }
+        if (!$dry) {
+            // Keep vote data fresh on rows that stay although they fell under the threshold; drop emptied sections.
+            foreach ($lowVotes as $k => $v) {
+                [$mt, $tid] = explode(':', $k);
+                $pdo->prepare('UPDATE movies SET vote_count = ?, popularity = ? WHERE media_type = ? AND tmdb_id = ?')
+                    ->execute([$v[0], number_format($v[1], 3, '.', ''), $mt === 'tv' ? 'series' : 'movie', (int) $tid]);
+            }
+            $pdo->prepare('DELETE FROM sections WHERE studio_id = ? AND NOT EXISTS (SELECT 1 FROM movies m WHERE m.section_id = sections.id)')->execute([$studioId]);
+        }
+        $c = $pdo->prepare('SELECT COUNT(*) FROM movies m JOIN sections sec ON sec.id = m.section_id WHERE sec.studio_id = ?');
+        $c->execute([$studioId]);
+        $afterCount = $dry ? $beforeCount + $totals['new'] - $deleted : (int) $c->fetchColumn();
+        say(sprintf('Titles in studio: before %d -> after %d%s.', $beforeCount, $afterCount, $dry ? ' (projected)' : ''));
+        if ($protectedBelow && (isset($opts['prune']) || $verbose)) {
+            say(count($protectedBelow) . ' protected titles below the vote threshold (kept):');
+            foreach (array_unique($protectedBelow) as $line) {
+                say('  ' . $line);
             }
         }
     }
@@ -338,12 +436,105 @@ function importStudio(PDO $pdo, TmdbClient $tmdb, string $slug, array $opts, boo
     }
 }
 
+/** @return array<int, true> ids of movies referenced by another table (any movie_id column or FK to movies.id). */
+function referencedMovieIds(PDO $pdo): array
+{
+    $tables = [];
+    $q = "SELECT table_name AS t, column_name AS c FROM information_schema.columns
+          WHERE table_schema = DATABASE() AND column_name = 'movie_id' AND table_name <> 'movies'
+          UNION
+          SELECT table_name, column_name FROM information_schema.key_column_usage
+          WHERE table_schema = DATABASE() AND referenced_table_name = 'movies' AND referenced_column_name = 'id'";
+    foreach ($pdo->query($q)->fetchAll() as $r) {
+        $tables[$r['t'] . '.' . $r['c']] = [$r['t'], $r['c']];
+    }
+    $ids = [];
+    foreach ($tables as $tc) {
+        foreach ($pdo->query('SELECT DISTINCT `' . $tc[1] . '` FROM `' . $tc[0] . '`')->fetchAll(PDO::FETCH_COLUMN) as $id) {
+            $ids[(int) $id] = true;
+        }
+    }
+    return $ids;
+}
+
+/** 'movie:<id>' / 'tv:<id>' => franchise slug, 'c:<tmdb collection id>' => franchise slug. */
+function franchiseMap(array $franchises): array
+{
+    $map = [];
+    foreach ($franchises as $slug => $f) {
+        foreach ($f['titles'] ?? [] as $t) {
+            $map[$t] = $slug;
+        }
+        foreach ($f['tmdb_collections'] ?? [] as $cid) {
+            $map['c:' . $cid] = $slug;
+        }
+    }
+    return $map;
+}
+
+/**
+ * Collection row (saga) for an item: a manual franchise wins over TMDB belongs_to_collection.
+ * Creates the row when missing (not on dry runs, where 0 stands for "would be created"). Memoized per run.
+ */
+function ensureCollection(PDO $pdo, TmdbClient $tmdb, array $item, array $franchiseOf, array $franchises, bool $dry): ?int
+{
+    static $memo = [];
+    $slug = $franchiseOf[($item['media'] === 'series' ? 'tv' : 'movie') . ':' . $item['tmdb']]
+        ?? ($item['collection'] ? ($franchiseOf['c:' . $item['collection']] ?? null) : null);
+    if ($slug === null && !$item['collection']) {
+        return null;
+    }
+    $mk = $slug !== null ? 's:' . $slug : 't:' . $item['collection'];
+    if (array_key_exists($mk, $memo)) {
+        return $memo[$mk];
+    }
+    if ($slug !== null) {
+        $f = $franchises[$slug];
+        $sel = $pdo->prepare('SELECT id, name, poster_url FROM collections WHERE slug = ?');
+        $sel->execute([$slug]);
+        $row = $sel->fetch();
+        if ($row && !$dry && ($row['name'] !== $f['name'] || $row['poster_url'] !== ($f['poster'] ?? null))) {
+            $pdo->prepare('UPDATE collections SET name = ?, poster_url = ? WHERE id = ?')->execute([$f['name'], $f['poster'] ?? null, $row['id']]);
+        }
+        if (!$row && !$dry) {
+            $pdo->prepare('INSERT INTO collections (slug, name, poster_url) VALUES (?, ?, ?)')->execute([$slug, $f['name'], $f['poster'] ?? null]);
+            return $memo[$mk] = (int) $pdo->lastInsertId();
+        }
+        return $memo[$mk] = $row ? (int) $row['id'] : 0;
+    }
+    $sel = $pdo->prepare('SELECT id FROM collections WHERE tmdb_collection_id = ?');
+    $sel->execute([$item['collection']]);
+    $id = $sel->fetchColumn();
+    if ($id !== false) {
+        return $memo[$mk] = (int) $id;
+    }
+    if ($dry) {
+        return $memo[$mk] = 0;
+    }
+    $d = $tmdb->get('/collection/' . $item['collection'], [
+        'language' => 'es-MX',
+        'append_to_response' => 'translations,images',
+        'include_image_language' => 'es,null',
+    ]);
+    if (isset($d['_not_found']) || empty($d['id'])) {
+        return $memo[$mk] = null;
+    }
+    $name = TmdbResolver::title($d, 'tv', []); // same LATAM-first precedence (fields: name / original_name)
+    $name = trim((string) preg_replace('/\s*(?:[-:–]\s*)?\(?\b(?:colecci[oó]n|collection|saga)\b\)?\s*$/iu', '', $name)) ?: $name;
+    $pdo->prepare('INSERT INTO collections (tmdb_collection_id, slug, name, poster_url) VALUES (?, ?, ?, ?)')
+        ->execute([(int) $d['id'], 'tmdb-' . (int) $d['id'], $name, TmdbResolver::poster($d)['url']]);
+    return $memo[$mk] = (int) $pdo->lastInsertId();
+}
+
 /** A section has one 'source' or several 'sources' (merged, first occurrence wins). */
 function collectSection(TmdbClient $tmdb, array $section, string $today): array
 {
     $refs = [];
     foreach ($section['sources'] ?? [$section['source']] as $source) {
         foreach (collectIds($tmdb, $source, $today) as $ref) {
+            if (isset($source['min_votes'])) {
+                $ref['min_votes'] = (int) $source['min_votes'];
+            }
             $refs[$ref['media'] . ':' . $ref['id']] = $ref;
         }
     }
@@ -353,7 +544,7 @@ function collectSection(TmdbClient $tmdb, array $section, string $today): array
 /** @return list<array{media: string, id: int}> media is the TMDB path segment: 'movie' or 'tv'. */
 function collectIds(TmdbClient $tmdb, array $source, string $today): array
 {
-    $media = $source['media'] === 'tv' ? 'tv' : 'movie';
+    $media = ($source['media'] ?? 'movie') === 'tv' ? 'tv' : 'movie';
     if ($source['type'] === 'collection') {
         // TMDB collections: released parts only; optional 'genre' (keep only) / 'not_genre' (drop) filters.
         $refs = [];

@@ -14,6 +14,7 @@
 // DisneyToon Studios 5391, Disney Channel 240533 (+ Disney Channels Worldwide 241787), Lucasfilm Ltd. 1.
 // TMDB tags WDAS films inconsistently (discover by company 6125 only returns ~18 modern films),
 // so the seven WDAS eras use the explicit canon below (ids resolved with `--match-existing`).
+// Those eras set 'keep_all' => true: the canon is never filtered by the vote threshold (curation).
 require_once __DIR__ . '/_helpers.php';
 
 return [
@@ -22,32 +23,32 @@ return [
     'logo' => ['type' => 'company', 'id' => 6125], // Walt Disney Animation Studios (2 = Walt Disney Pictures, used by live action)
     'sections' => [
         [
-            'slug' => 'golden-age', 'name' => 'Era Dorada', 'period' => '1937-1942',
+            'slug' => 'golden-age', 'keep_all' => true, 'name' => 'Era Dorada', 'period' => '1937-1942',
             'source' => ['type' => 'ids', 'media' => 'movie', 'ids' => [408, 10895, 756, 11360, 3170]],
         ],
         [
-            'slug' => 'wartime', 'name' => 'Era de la Guerra / Películas Paquete', 'period' => '1942-1949',
+            'slug' => 'wartime', 'keep_all' => true, 'name' => 'Era de la Guerra / Películas Paquete', 'period' => '1942-1949',
             'source' => ['type' => 'ids', 'media' => 'movie', 'ids' => [14906, 15947, 20343, 46929, 13757, 13465]],
         ],
         [
-            'slug' => 'silver-age', 'name' => 'Era de Plata', 'period' => '1950-1967',
+            'slug' => 'silver-age', 'keep_all' => true, 'name' => 'Era de Plata', 'period' => '1950-1967',
             'source' => ['type' => 'ids', 'media' => 'movie', 'ids' => [11224, 12092, 10693, 10340, 10882, 12230, 9078, 9325]],
         ],
         [
-            'slug' => 'bronze-age', 'name' => 'Era de Bronce / Oscura', 'period' => '1970-1988',
+            'slug' => 'bronze-age', 'keep_all' => true, 'name' => 'Era de Bronce / Oscura', 'period' => '1970-1988',
             'source' => ['type' => 'ids', 'media' => 'movie', 'ids' => [10112, 11886, 250480, 11319, 10948, 10957, 9994, 12233]],
         ],
         [
-            'slug' => 'renaissance', 'name' => 'El Renacimiento de Disney', 'period' => '1989-1999',
+            'slug' => 'renaissance', 'keep_all' => true, 'name' => 'El Renacimiento de Disney', 'period' => '1989-1999',
             'source' => ['type' => 'ids', 'media' => 'movie', 'ids' => [10144, 11135, 10020, 812, 8587, 10530, 10545, 11970, 10674, 37135]],
         ],
         [
-            'slug' => 'post-renaissance', 'name' => 'Post-Renacimiento / Era Post-Clásica', 'period' => '2000-2008',
+            'slug' => 'post-renaissance', 'keep_all' => true, 'name' => 'Post-Renacimiento / Era Post-Clásica', 'period' => '2000-2008',
             'source' => ['type' => 'ids', 'media' => 'movie', 'ids' => [49948, 10567, 11688, 10865, 11544, 9016, 10009, 13700, 9982, 1267, 13053]],
         ],
         [
             // Includes Moana 2 (1241982) and Zootopia 2 (1084242), added to the original seed list.
-            'slug' => 'revival', 'name' => 'Resurgimiento de Disney / Era 3D', 'period' => '2009-presente',
+            'slug' => 'revival', 'keep_all' => true, 'name' => 'Resurgimiento de Disney / Era 3D', 'period' => '2009-presente',
             'source' => ['type' => 'ids', 'media' => 'movie', 'ids' => [
                 10198, 38757, 51162, 82690, 109445, 177572, 269149, 277834, 404368, 330457,
                 527774, 568124, 877269, 1022796, 1241982, 1084242,

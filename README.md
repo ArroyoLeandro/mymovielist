@@ -62,3 +62,16 @@ Create `api/database/studios/<slug>.php` (see `disney.php`): studio slug/name/lo
 ## API caching
 
 `GET /api/studios` and `GET /api/studios/{slug}/movies` are static: they carry an `ETag` and `Cache-Control: private, no-cache` and answer `If-None-Match` with `304`. Everything per user or social (`/ratings`, `/me/progress`, `/ranking`, entries) is `no-store`. The SPA uses TanStack Query: static data is cached for an hour, ratings are polled every 8 s and the ranking every 15 s, only while the tab is visible.
+
+### Curation and sagas (migration 003)
+
+Apply `api/database/migrations/003_curation.sql` once (MariaDB; adds `movies.release_date/vote_count/popularity/collection_id` and the `collections` table; re-runnable). Then:
+
+```bash
+cd api
+php bin/import-tmdb.php --studio=all                    # fills votes/popularity/collections for every studio
+php bin/import-tmdb.php --studio=all --prune --dry-run  # preview: per-studio before/after and what would be deleted
+php bin/import-tmdb.php --studio=all --prune            # delete titles below the thresholds
+```
+
+Thresholds: movies >= 500 TMDB votes, series >= 100 (override with `min_votes` on a studio, section or source). Never filtered nor pruned: titles with watch entries (or any table with a `movie_id` column), `api/database/studios/always-keep.php`, and sections with `'keep_all' => true` (the WDAS canon). Sagas come from TMDB `belongs_to_collection` plus the manual `api/database/studios/franchises.php` (mainly series); a saga in the UI is any collection with 2+ titles in the studio.

@@ -101,7 +101,11 @@ final class Repository
             : null;
     }
 
-    /** Static catalog: sections with titles. No per-user or social data, so it can be cached. */
+    /**
+     * Static catalog: sections with titles, plus sagas (collections with 2+ titles in this studio). No per-user or
+     * social data, so it can be cached.
+     * @return array{sections: list<array>, sagas: list<array>}
+     */
     public function catalog(int $studioId): array
     {
         $sections = $this->run(
@@ -110,15 +114,18 @@ final class Repository
         )->fetchAll();
 
         $movies = $this->run(
-            'SELECT m.id, m.section_id, m.title, m.original_title, m.year, m.poster_url, m.media_type, m.tmdb_id
+            'SELECT m.id, m.section_id, m.title, m.original_title, m.year, m.release_date, m.poster_url, m.media_type, m.tmdb_id,
+                    c.slug AS collection_slug, c.name AS collection_name, c.poster_url AS collection_poster
              FROM movies m
              JOIN sections sec ON sec.id = m.section_id
+             LEFT JOIN collections c ON c.id = m.collection_id
              WHERE sec.studio_id = ?
              ORDER BY m.sort_order, m.id',
             [$studioId]
         )->fetchAll();
 
         $bySection = [];
+        $groups = []; // collection slug => saga being built
         foreach ($movies as $m) {
             $bySection[$m['section_id']][] = [
                 'id' => (int) $m['id'],
@@ -128,15 +135,46 @@ final class Repository
                 'posterUrl' => $m['poster_url'],
                 'mediaType' => $m['media_type'],
                 'tmdbId' => $m['tmdb_id'] === null ? null : (int) $m['tmdb_id'],
+                'collection' => $m['collection_slug'] === null ? null : ['slug' => $m['collection_slug'], 'name' => $m['collection_name']],
             ];
+            if ($m['collection_slug'] !== null) {
+                $date = $m['release_date'] ?: sprintf('%04d-01-01', (int) $m['year']);
+                $g = &$groups[$m['collection_slug']];
+                $g['slug'] = $m['collection_slug'];
+                $g['name'] = $m['collection_name'];
+                $g['poster'] = $m['collection_poster'];
+                $g['items'][] = [$date, (int) $m['id'], $m['poster_url']];
+                unset($g);
+            }
         }
 
-        return array_map(fn(array $s) => [
-            'slug' => $s['slug'],
-            'name' => $s['name'],
-            'period' => $s['period'],
-            'movies' => $bySection[$s['id']] ?? [],
-        ], $sections);
+        $sagas = [];
+        foreach ($groups as $g) {
+            if (count($g['items']) < 2) {
+                continue;
+            }
+            usort($g['items'], fn(array $a, array $b) => [$a[0], $a[1]] <=> [$b[0], $b[1]]);
+            $sagas[] = [
+                'first' => $g['items'][0][0],
+                'saga' => [
+                    'slug' => $g['slug'],
+                    'name' => $g['name'],
+                    'posterUrl' => $g['poster'] ?: $g['items'][0][2],
+                    'titleIds' => array_map(fn(array $i) => $i[1], $g['items']),
+                ],
+            ];
+        }
+        usort($sagas, fn(array $a, array $b) => [$a['first'], $a['saga']['name']] <=> [$b['first'], $b['saga']['name']]);
+
+        return [
+            'sections' => array_map(fn(array $s) => [
+                'slug' => $s['slug'],
+                'name' => $s['name'],
+                'period' => $s['period'],
+                'movies' => $bySection[$s['id']] ?? [],
+            ], $sections),
+            'sagas' => array_map(fn(array $x) => $x['saga'], $sagas),
+        ];
     }
 
     /**

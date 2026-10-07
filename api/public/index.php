@@ -72,10 +72,8 @@ try {
         }
         if ($m[2] === 'movies') {
             // Static: titles and posters only, cacheable. Per-user and social data is in /ratings.
-            Http::jsonCached([
-                'studio' => ['slug' => $studio['slug'], 'name' => $studio['name'], 'logoUrl' => $studio['logoUrl']],
-                'sections' => $repo->catalog($studio['id']),
-            ]);
+            Http::jsonCached(['studio' => ['slug' => $studio['slug'], 'name' => $studio['name'], 'logoUrl' => $studio['logoUrl']]]
+                + $repo->catalog($studio['id']));
         }
         Http::json($repo->ratings($studio['id'], $current['id']));
     } elseif ($method === 'PUT' && preg_match('#^/api/movies/(\d+)/entry$#', $path, $m)) {

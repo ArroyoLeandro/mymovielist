@@ -22,21 +22,39 @@ CREATE TABLE sections (
     CONSTRAINT fk_sections_studio FOREIGN KEY (studio_id) REFERENCES studios (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE collections (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    tmdb_collection_id INT UNSIGNED NULL,
+    slug VARCHAR(80) NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    poster_url VARCHAR(500) NULL,
+    sort_order INT NOT NULL DEFAULT 0,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_collections_tmdb (tmdb_collection_id),
+    UNIQUE KEY uq_collections_slug (slug)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE movies (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT,
     section_id INT UNSIGNED NOT NULL,
     title VARCHAR(200) NOT NULL,
     original_title VARCHAR(200) NULL,
     year SMALLINT NOT NULL,
+    release_date DATE NULL,
     media_type ENUM('movie','series') NOT NULL DEFAULT 'movie',
     tmdb_id INT UNSIGNED NULL,
+    vote_count INT UNSIGNED NULL,
+    popularity DECIMAL(10,3) NULL,
+    collection_id INT UNSIGNED NULL,
     wiki_title VARCHAR(200) NULL,
     poster_url VARCHAR(500) NULL,
     sort_order INT NOT NULL DEFAULT 0,
     PRIMARY KEY (id),
     KEY idx_movies_section (section_id, sort_order),
     UNIQUE KEY uq_movies_media_tmdb (media_type, tmdb_id),
-    CONSTRAINT fk_movies_section FOREIGN KEY (section_id) REFERENCES sections (id) ON DELETE CASCADE
+    KEY idx_movies_collection (collection_id),
+    CONSTRAINT fk_movies_section FOREIGN KEY (section_id) REFERENCES sections (id) ON DELETE CASCADE,
+    CONSTRAINT fk_movies_collection FOREIGN KEY (collection_id) REFERENCES collections (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE users (
