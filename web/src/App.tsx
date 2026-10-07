@@ -1,13 +1,21 @@
-import { Navigate, NavLink, Route, Routes } from 'react-router-dom'
+import { Navigate, NavLink, Route, Routes, useLocation, useParams } from 'react-router-dom'
 import { useAuth } from './auth'
 import Login from './pages/Login'
+import Home from './pages/Home'
 import Catalog from './pages/Catalog'
 import Ranking from './pages/Ranking'
 import Profile from './pages/Profile'
 import { AppSkeleton } from './components/Skeleton'
 
+// Old links (/studios/:slug) keep working.
+function LegacyStudioRedirect() {
+  const { slug = '' } = useParams()
+  return <Navigate to={`/studio/${slug}`} replace />
+}
+
 export default function App() {
   const { user, ready, logout } = useAuth()
+  const { pathname } = useLocation()
   if (!ready) return <AppSkeleton />
   if (!user) return <Login />
 
@@ -16,7 +24,7 @@ export default function App() {
       <header className="nav">
         <NavLink to="/" className="brand">Movie<span>Nights</span></NavLink>
         <nav>
-          <NavLink to="/studios/disney">Catálogo</NavLink>
+          <NavLink to="/" end className={({ isActive }) => (isActive || pathname.startsWith('/studio') ? 'active' : '')}>Estudios</NavLink>
           <NavLink to="/ranking">Ranking</NavLink>
           <NavLink to={`/u/${user.tag}`}>Mi lista</NavLink>
         </nav>
@@ -24,11 +32,12 @@ export default function App() {
       </header>
       <main className="page">
         <Routes>
-          <Route path="/" element={<Navigate to="/studios/disney" replace />} />
-          <Route path="/studios/:slug" element={<Catalog />} />
+          <Route path="/" element={<Home />} />
+          <Route path="/studio/:slug" element={<Catalog />} />
+          <Route path="/studios/:slug" element={<LegacyStudioRedirect />} />
           <Route path="/ranking" element={<Ranking />} />
           <Route path="/u/:tag" element={<Profile />} />
-          <Route path="*" element={<Navigate to="/studios/disney" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
     </>

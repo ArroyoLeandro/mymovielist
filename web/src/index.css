@@ -271,3 +271,64 @@ input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px #f
   .sk { animation: none; }
   .scores button.on { animation: none; }
 }
+
+/* ---------- sections: sticky chips, collapsible headers ---------- */
+:root { --nav-h: 58px; }
+.chips {
+  position: sticky; top: var(--nav-h); z-index: 9;
+  display: flex; gap: 8px; overflow-x: auto; scrollbar-width: thin;
+  margin: 12px -20px 0; padding: 10px 20px;
+  background: #0b0a1cee; backdrop-filter: blur(10px); border-bottom: 1px solid var(--line);
+}
+.chips button {
+  flex: none; background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+  padding: 5px 12px; color: var(--muted); font-size: 0.85rem; white-space: nowrap;
+}
+.chips button:hover { color: var(--text); border-color: var(--muted); }
+.chips small { color: var(--gold); margin-left: 4px; }
+.chips .chips-toggle { margin-left: auto; background: none; }
+.era { scroll-margin-top: calc(var(--nav-h) + 58px); }
+.era h2 { padding: 0; }
+.era-toggle {
+  display: flex; align-items: baseline; gap: 4px; width: 100%; text-align: left;
+  background: none; border: 0; padding: 0 0 10px; font: inherit; color: inherit; cursor: pointer;
+}
+.era-toggle:disabled { cursor: default; }
+.era-toggle em { margin-left: auto; font-style: normal; font-size: 0.85rem; color: var(--muted); font-weight: 500; }
+.chev { flex: none; width: 8px; height: 8px; margin: 0 10px 2px 2px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); transition: transform 0.15s; }
+.chev.open { transform: rotate(45deg); }
+.era-body { content-visibility: auto; contain-intrinsic-size: auto 900px; }
+.badge {
+  position: absolute; left: 8px; top: 8px; padding: 2px 9px; border-radius: 999px;
+  background: #0b0a1ccc; border: 1px solid var(--rose); color: var(--rose);
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; backdrop-filter: blur(4px);
+}
+
+/* ---------- studios home ---------- */
+.studios { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 18px; margin-top: 24px; }
+.studio-card {
+  display: grid; gap: 6px; align-content: start; padding: 16px; text-decoration: none;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
+  transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.studio-card:hover { transform: translateY(-3px); border-color: var(--gold); box-shadow: 0 10px 40px #ffc94d1a; }
+.studio-card h2 { font-size: 1.25rem; margin-top: 6px; }
+.studio-card p { margin: 0; font-size: 0.85rem; }
+.studio-card .meter { margin-top: 6px; }
+.studio-progress { color: var(--gold); min-height: 1.3em; }
+.logo-tile {
+  display: grid; place-items: center; height: 96px; padding: 14px; border-radius: 12px;
+  background: #f4f2ff;
+}
+.logo-tile img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.logo-tile.wordmark { background: linear-gradient(135deg, var(--panel-2), var(--line)); }
+.logo-tile.wordmark span { font-family: var(--display); font-weight: 800; font-size: 1.5rem; letter-spacing: -0.02em; color: var(--gold); text-align: center; }
+.sk-logo { height: 96px; border-radius: 12px; }
+
+@media (max-width: 720px) {
+  :root { --nav-h: 96px; }
+  .chips { margin-inline: -14px; padding-inline: 14px; }
+  .studios { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .logo-tile { height: 72px; }
+  .logo-tile.wordmark span { font-size: 1.15rem; }
+}

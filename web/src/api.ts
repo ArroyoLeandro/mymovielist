@@ -1,19 +1,28 @@
 export interface User { id: number; tag: string }
 export interface Rating { tag: string; score: number | null }
+/** Static title data (cacheable). */
 export interface Movie {
   id: number
   title: string
   originalTitle: string | null
   year: number
   posterUrl: string | null
+  mediaType: 'movie' | 'series'
+  tmdbId: number | null
+}
+/** Dynamic per-title data; only titles with at least one entry have a row. */
+export interface RatingRow {
+  movieId: number
   watched: boolean
   score: number | null
+  ratings: Rating[]
   watchersCount: number
   averageScore: number | null
-  ratings: Rating[]
 }
 export interface Section { slug: string; name: string; period: string; movies: Movie[] }
-export interface Catalog { studio: { slug: string; name: string }; sections: Section[] }
+export interface Catalog { studio: { slug: string; name: string; logoUrl: string | null }; sections: Section[] }
+export interface Studio { slug: string; name: string; logoUrl: string | null; movieCount: number }
+export interface Progress { slug: string; watchedCount: number }
 export interface Entry { movieId: number; watched: boolean; score: number | null; watchedAt: string | null }
 export interface RankingRow { tag: string; watchedCount: number; averageScore: number | null }
 export interface ListEntry {
@@ -66,7 +75,10 @@ export const api = {
   me: () => request<{ user: User }>('GET', '/session', undefined, true),
   login: (tag: string, password: string) => request<{ user: User }>('POST', '/session', { tag, password }, true),
   logout: () => request<void>('DELETE', '/session', undefined, true),
+  studios: () => request<Studio[]>('GET', '/studios'),
+  progress: () => request<Progress[]>('GET', '/me/progress'),
   catalog: (slug: string) => request<Catalog>('GET', `/studios/${encodeURIComponent(slug)}/movies`),
+  ratings: (slug: string) => request<RatingRow[]>('GET', `/studios/${encodeURIComponent(slug)}/ratings`),
   saveEntry: (id: number, watched: boolean, score: number | null) =>
     request<Entry>('PUT', `/movies/${id}/entry`, { watched, score }),
   ranking: () => request<RankingRow[]>('GET', '/ranking'),

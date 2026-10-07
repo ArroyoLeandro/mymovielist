@@ -1,92 +1,172 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { memo, useCallback, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useParams } from 'react-router-dom'
-import { api, type Catalog as CatalogData, type Movie } from '../api'
+import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { api, type Movie, type RatingRow } from '../api'
 import { useAuth } from '../auth'
 import Poster from '../components/Poster'
 import { CatalogSkeleton } from '../components/Skeleton'
+import { useCatalog } from '../queries'
 
 type Filter = 'all' | 'watched' | 'unwatched'
+type SaveFn = (movieId: number, watched: boolean, score: number | null) => Promise<boolean>
+
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+const BIG_STUDIO = 150 // above this many titles only the first section starts expanded
+
+// ---- collapsed sections, remembered per studio (storage may be unavailable) ----
+const storageKey = (slug: string) => `catalog-collapsed:${slug}`
+function readCollapsed(slug: string): string[] | null {
+  try {
+    const raw = localStorage.getItem(storageKey(slug))
+    const parsed = raw ? JSON.parse(raw) : null
+    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === 'string') : null
+  } catch {
+    return null
+  }
+}
+function writeCollapsed(slug: string, list: string[]) {
+  try {
+    localStorage.setItem(storageKey(slug), JSON.stringify(list))
+  } catch {
+    /* private mode / blocked storage: state just isn't remembered */
+  }
+}
+
+// ---- optimistic patching of the ratings cache ----
+const byScore = (a: { tag: string; score: number | null }, b: { tag: string; score: number | null }) =>
+  (b.score ?? -1) - (a.score ?? -1) || a.tag.localeCompare(b.tag)
+
+function applyEntry(rows: RatingRow[], movieId: number, tag: string, watched: boolean, score: number | null): RatingRow[] {
+  const i = rows.findIndex((r) => r.movieId === movieId)
+  const row: RatingRow = i >= 0 ? rows[i] : { movieId, watched: false, score: null, ratings: [], watchersCount: 0, averageScore: null }
+  const others = row.ratings.filter((r) => r.tag !== tag)
+  const ratings = watched ? [...others, { tag, score }].sort(byScore) : others
+  if (ratings.length === 0) return rows.filter((r) => r.movieId !== movieId)
+  const scored = ratings.filter((r) => r.score !== null) as { score: number }[]
+  const next: RatingRow = {
+    ...row,
+    watched,
+    score: watched ? score : null,
+    ratings,
+    watchersCount: ratings.length,
+    averageScore: scored.length ? Math.round((scored.reduce((a, r) => a + r.score, 0) / scored.length) * 100) / 100 : null,
+  }
+  return i >= 0 ? rows.map((r) => (r.movieId === movieId ? next : r)) : [...rows, next]
+}
+
+function restoreRow(rows: RatingRow[], movieId: number, prev: RatingRow | undefined): RatingRow[] {
+  const rest = rows.filter((r) => r.movieId !== movieId)
+  return prev ? [...rest, prev] : rest
+}
 
 export default function Catalog() {
-  const { slug = 'disney' } = useParams()
-  const [data, setData] = useState<CatalogData | null>(null)
-  const [error, setError] = useState('')
+  const { slug = '' } = useParams()
+  return <CatalogView key={slug} slug={slug} /> // remount per studio: local UI state starts fresh
+}
+
+function CatalogView({ slug }: { slug: string }) {
+  const { user } = useAuth()
+  const me = user?.tag ?? ''
+  const qc = useQueryClient()
+  const catalog = useCatalog(slug)
+  const ratingsKey = useMemo(() => ['ratings', slug], [slug])
+  const entryKey = ['entry']
+  const mutating = useIsMutating({ mutationKey: entryKey })
+
+  // Dynamic data. Polls every 8 s while visible; never while a save is in flight (stale-edit guard),
+  // and an in-flight poll is cancelled when an edit starts (see onMutate).
+  const ratings = useQuery({
+    queryKey: ratingsKey,
+    queryFn: () => api.ratings(slug),
+    refetchInterval: mutating > 0 ? false : 8000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: () => qc.isMutating({ mutationKey: entryKey }) === 0,
+  })
+
+  const save = useMutation({
+    mutationKey: entryKey,
+    mutationFn: (v: { movieId: number; watched: boolean; score: number | null }) => api.saveEntry(v.movieId, v.watched, v.score),
+    onMutate: async (v) => {
+      await qc.cancelQueries({ queryKey: ratingsKey }) // drop any poll that started before this edit
+      const prev = qc.getQueryData<RatingRow[]>(ratingsKey)?.find((r) => r.movieId === v.movieId)
+      qc.setQueryData<RatingRow[]>(ratingsKey, (rows) => applyEntry(rows ?? [], v.movieId, me, v.watched, v.score))
+      return { prev }
+    },
+    onError: (_e, v, ctx) => {
+      qc.setQueryData<RatingRow[]>(ratingsKey, (rows) => restoreRow(rows ?? [], v.movieId, ctx?.prev))
+    },
+    onSuccess: (entry, v) => {
+      // Server is the source of truth, unless a newer save is still in flight.
+      if (qc.isMutating({ mutationKey: entryKey }) <= 1) {
+        qc.setQueryData<RatingRow[]>(ratingsKey, (rows) => applyEntry(rows ?? [], v.movieId, me, entry.watched, entry.score))
+      }
+    },
+    onSettled: () => {
+      // Once every in-flight save is done, refresh community stats and the home progress.
+      if (qc.isMutating({ mutationKey: entryKey }) <= 1) {
+        void qc.invalidateQueries({ queryKey: ratingsKey })
+        void qc.invalidateQueries({ queryKey: ['progress'] })
+      }
+    },
+  })
+  const { mutateAsync } = save
+  const onSave = useCallback<SaveFn>(
+    (movieId, watched, score) => mutateAsync({ movieId, watched, score }).then(() => true, () => false),
+    [mutateAsync],
+  )
+
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
-  const pending = useRef(0)
-  const editVersion = useRef(0) // bumped when a local edit starts and when it finishes
-  const { user } = useAuth()
+  const [stored, setStored] = useState<string[] | null>(() => readCollapsed(slug))
 
-  const load = useCallback(() => api.catalog(slug).then(setData), [slug])
+  const byId = useMemo(() => new Map((ratings.data ?? []).map((r) => [r.movieId, r])), [ratings.data])
+  const sections = catalog.data?.sections
+  const all = useMemo(() => sections?.flatMap((s) => s.movies) ?? [], [sections])
+  const haystack = useMemo(() => new Map(all.map((m) => [m.id, norm(`${m.title} ${m.originalTitle ?? ''}`)])), [all])
 
-  // Like load, but drops the response if a local edit started/finished meanwhile or a save is pending.
-  const refresh = useCallback(() => {
-    const version = editVersion.current
-    return api.catalog(slug).then((d) => {
-      if (pending.current === 0 && editVersion.current === version) setData(d)
-    })
-  }, [slug])
-
-  useEffect(() => {
-    setData(null)
-    setError('')
-    load().catch((e) => setError(e.message))
-  }, [load])
-
-  // Background refresh; stale responses are discarded so optimistic edits are not clobbered.
-  useEffect(() => {
-    const poll = () => {
-      if (document.visibilityState === 'visible' && pending.current === 0) refresh().catch(() => {})
-    }
-    const id = setInterval(poll, 8000)
-    document.addEventListener('visibilitychange', poll)
-    return () => {
-      clearInterval(id)
-      document.removeEventListener('visibilitychange', poll)
-    }
-  }, [refresh])
-
-  const patch = (id: number, fn: (m: Movie) => Movie) =>
-    setData((d) => d && { ...d, sections: d.sections.map((s) => ({ ...s, movies: s.movies.map((m) => (m.id === id ? fn(m) : m)) })) })
-
-  const save = async (movie: Movie, watched: boolean, score: number | null) => {
-    const delta = Number(watched) - Number(movie.watched)
-    patch(movie.id, (m) => ({ ...m, watched, score, watchersCount: m.watchersCount + delta }))
-    pending.current++
-    editVersion.current++
-    try {
-      const entry = await api.saveEntry(movie.id, watched, score)
-      // Server is the source of truth, unless a newer save for this session is still in flight.
-      if (pending.current === 1) patch(movie.id, (m) => ({ ...m, watched: entry.watched, score: entry.score }))
-      return true
-    } catch {
-      patch(movie.id, () => movie) // roll back
-      return false
-    } finally {
-      // Refresh community stats once all in-flight saves are done.
-      editVersion.current++
-      if (--pending.current === 0) refresh().catch(() => {})
-    }
+  if ((catalog.error && !catalog.data) || (ratings.error && !ratings.data)) {
+    return <p className="error">{(catalog.error ?? ratings.error)?.message}</p>
   }
+  if (!catalog.data || !sections || !ratings.data) return <CatalogSkeleton />
 
-  const all = useMemo(() => data?.sections.flatMap((s) => s.movies) ?? [], [data])
-  const watchedCount = all.filter((m) => m.watched).length
+  const watchedCount = ratings.data.filter((r) => r.watched).length
   const pct = all.length ? Math.round((watchedCount / all.length) * 100) : 0
 
   const q = norm(query.trim())
-  const visible = (m: Movie) =>
-    (filter === 'all' || (filter === 'watched') === m.watched) &&
-    (!q || norm(m.title).includes(q) || norm(m.originalTitle ?? '').includes(q))
+  const searching = q !== '' || filter !== 'all'
+  const visible = (m: Movie) => {
+    const watched = byId.get(m.id)?.watched ?? false
+    return (filter === 'all' || (filter === 'watched') === watched) && (!q || haystack.get(m.id)!.includes(q))
+  }
 
-  if (error) return <p className="error">{error}</p>
-  if (!data) return <CatalogSkeleton />
+  const defaultCollapsed = all.length > BIG_STUDIO ? sections.slice(1).map((s) => s.slug) : []
+  const collapsed = new Set(stored ?? defaultCollapsed)
+  const setCollapsedList = (list: string[]) => {
+    setStored(list)
+    writeCollapsed(slug, list)
+  }
+  const toggle = (sectionSlug: string) => {
+    const next = new Set(collapsed)
+    if (!next.delete(sectionSlug)) next.add(sectionSlug)
+    setCollapsedList([...next])
+  }
+  const jump = (sectionSlug: string) => {
+    if (collapsed.has(sectionSlug)) {
+      const next = new Set(collapsed)
+      next.delete(sectionSlug)
+      setCollapsedList([...next])
+    }
+    requestAnimationFrame(() => document.getElementById(`sec-${sectionSlug}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }
+  const allCollapsed = sections.every((s) => collapsed.has(s.slug))
+
+  const shown = sections.map((s) => ({ s, movies: s.movies.filter(visible) })).filter((x) => !searching || x.movies.length > 0)
 
   return (
     <>
       <div className="toolbar">
         <div className="progress">
-          <div className="progress-text"><h1 className="title">{data.studio.name}</h1><span>{watchedCount}/{all.length} vistas &middot; {pct}%</span></div>
+          <div className="progress-text"><h1 className="title">{catalog.data.studio.name}</h1><span>{watchedCount}/{all.length} vistas &middot; {pct}%</span></div>
           <div className="meter"><i style={{ width: `${pct}%` }} /></div>
         </div>
         <input type="search" placeholder="Buscar por título" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Buscar por título" />
@@ -99,19 +179,38 @@ export default function Catalog() {
         </div>
       </div>
 
-      {data.sections.map((s) => {
-        const movies = s.movies.filter(visible)
-        if (movies.length === 0) return null
+      {sections.length > 1 && (
+        <nav className="chips" aria-label="Secciones">
+          {sections.map((s) => (
+            <button key={s.slug} onClick={() => jump(s.slug)} title={s.period}>{s.name} <small>{s.movies.length}</small></button>
+          ))}
+          <button className="chips-toggle" onClick={() => setCollapsedList(allCollapsed ? [] : sections.map((s) => s.slug))}>
+            {allCollapsed ? 'Expandir todo' : 'Contraer todo'}
+          </button>
+        </nav>
+      )}
+
+      {shown.map(({ s, movies }) => {
+        const open = searching || !collapsed.has(s.slug)
+        const seen = s.movies.filter((m) => byId.get(m.id)?.watched).length
         return (
-          <section key={s.slug} className="era">
-            <h2>{s.name} <span>{s.period}</span></h2>
-            <div className="grid">
-              {movies.map((m) => <Card key={m.id} movie={m} me={user?.tag} onSave={save} />)}
-            </div>
+          <section key={s.slug} id={`sec-${s.slug}`} className="era">
+            <h2>
+              <button className="era-toggle" aria-expanded={open} onClick={() => toggle(s.slug)} disabled={searching}>
+                <i className={`chev ${open ? 'open' : ''}`} aria-hidden="true" />
+                {s.name} <span>{s.period}</span>
+                <em>{seen}/{s.movies.length}</em>
+              </button>
+            </h2>
+            {open && (
+              <div className="grid era-body">
+                {movies.map((m) => <Card key={m.id} movie={m} r={byId.get(m.id)} me={me} onSave={onSave} />)}
+              </div>
+            )}
           </section>
         )
       })}
-      {all.filter(visible).length === 0 && <p className="muted">No hay títulos que coincidan. Borra la búsqueda o cambia el filtro.</p>}
+      {shown.length === 0 && <p className="muted">No hay títulos que coincidan. Borra la búsqueda o cambia el filtro.</p>}
     </>
   )
 }
@@ -119,7 +218,11 @@ export default function Catalog() {
 const LABELS = ['Horrible', 'Malo', 'Flojo', 'Regular', 'Pasable', 'Decente', 'Bueno', 'Muy bueno', 'Excelente', 'Obra maestra']
 const tier = (s: number | null) => (s === null ? '' : s <= 4 ? 'low' : s <= 7 ? 'mid' : 'high')
 
-function Card({ movie: m, me, onSave }: { movie: Movie; me?: string; onSave: (m: Movie, watched: boolean, score: number | null) => Promise<boolean> }) {
+const Card = memo(function Card({ movie: m, r, me, onSave }: { movie: Movie; r: RatingRow | undefined; me: string; onSave: SaveFn }) {
+  const watched = r?.watched ?? false
+  const score = r?.score ?? null
+  const ratings = r?.ratings ?? []
+  const watchersCount = r?.watchersCount ?? 0
   const [hover, setHover] = useState<number | null>(null)
   const [failed, setFailed] = useState(false)
   const group = useRef<HTMLDivElement>(null)
@@ -127,7 +230,7 @@ function Card({ movie: m, me, onSave }: { movie: Movie; me?: string; onSave: (m:
   const rate = async (n: number) => {
     setHover(null)
     setFailed(false)
-    if (!(await onSave(m, true, m.score === n ? null : n))) {
+    if (!(await onSave(m.id, true, score === n ? null : n))) {
       setFailed(true)
       setTimeout(() => setFailed(false), 3000)
     }
@@ -141,32 +244,33 @@ function Card({ movie: m, me, onSave }: { movie: Movie; me?: string; onSave: (m:
     const i = btns.indexOf(document.activeElement as HTMLButtonElement)
     btns[Math.min(9, Math.max(0, i + step))]?.focus()
   }
-  const shown = hover ?? m.score
+  const shown = hover ?? score
   return (
-    <article className={`card ${m.watched ? 'seen' : ''}`}>
+    <article className={`card ${watched ? 'seen' : ''}`}>
       <div className="art">
         <Poster url={m.posterUrl} title={m.title} />
+        {m.mediaType === 'series' && <span className="badge">Serie</span>}
         <button
-          className={`check ${m.watched ? 'on' : ''}`}
-          aria-pressed={m.watched}
-          aria-label={m.watched ? `Quitar ${m.title} de las vistas` : `Marcar ${m.title} como vista`}
-          onClick={() => onSave(m, !m.watched, null)}
+          className={`check ${watched ? 'on' : ''}`}
+          aria-pressed={watched}
+          aria-label={watched ? `Quitar ${m.title} de las vistas` : `Marcar ${m.title} como vista`}
+          onClick={() => void onSave(m.id, !watched, null)}
         >
-          {m.watched ? '✓' : '+'}
+          {watched ? '✓' : '+'}
         </button>
       </div>
       <h3>{m.title}</h3>
       <p className="year">{m.year}{m.originalTitle ? ` · ${m.originalTitle}` : ''}</p>
       <p className="score-read" aria-live="polite">
         <strong>{shown ?? '–'}</strong>
-        <span>{shown ? LABELS[shown - 1] : m.watched ? 'Sin puntaje' : 'Toca para puntuar'}</span>
+        <span>{shown ? LABELS[shown - 1] : watched ? 'Sin puntaje' : 'Toca para puntuar'}</span>
       </p>
       <div className="scores" role="group" aria-label="Tu puntaje" ref={group} onKeyDown={onKey} onMouseLeave={() => setHover(null)}>
         {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
           <button
             key={n}
-            className={`${m.score === n ? 'on' : ''} ${shown !== null && n <= shown ? 'fill' : ''}`}
-            aria-pressed={m.score === n}
+            className={`${score === n ? 'on' : ''} ${shown !== null && n <= shown ? 'fill' : ''}`}
+            aria-pressed={score === n}
             aria-label={`Puntuar ${n} de 10: ${LABELS[n - 1]}`}
             onMouseEnter={() => setHover(n)}
             onFocus={() => setHover(n)}
@@ -179,18 +283,18 @@ function Card({ movie: m, me, onSave }: { movie: Movie; me?: string; onSave: (m:
       </div>
       {failed && <p className="error small">No se pudo guardar. Inténtalo de nuevo.</p>}
       <p className="community">
-        {m.watchersCount === 0 ? 'Nadie aún' : `Vista por ${m.watchersCount}`}
-        {m.averageScore !== null && <b>★ {m.averageScore.toFixed(1)}</b>}
+        {watchersCount === 0 ? 'Nadie aún' : `Vista por ${watchersCount}`}
+        {r?.averageScore != null && <b>★ {r.averageScore.toFixed(1)}</b>}
       </p>
-      {m.ratings.length > 0 && (
+      {ratings.length > 0 && (
         <ul className="ratings" aria-label="Puntajes de tus amigos">
-          {m.ratings.map((r) => (
-            <li key={r.tag} className={`${r.tag === me ? 'me ' : ''}${tier(r.score)}`}>
-              {r.tag} <b>{r.score ?? '✓'}</b>
+          {ratings.map((x) => (
+            <li key={x.tag} className={`${x.tag === me ? 'me ' : ''}${tier(x.score)}`}>
+              {x.tag} <b>{x.score ?? '✓'}</b>
             </li>
           ))}
         </ul>
       )}
     </article>
   )
-}
+})

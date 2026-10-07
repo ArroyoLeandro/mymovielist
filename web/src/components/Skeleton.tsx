@@ -103,3 +103,22 @@ export function AppSkeleton() {
     </>
   )
 }
+
+export function HomeSkeleton() {
+  return (
+    <Busy label="Cargando estudios">
+      <Sk className="sk-title" />
+      <Sk className="sk-line" style={{ width: 240, marginTop: 10 }} />
+      <div className="studios" aria-hidden="true">
+        {Array.from({ length: 6 }, (_, i) => (
+          <div key={i} className="studio-card">
+            <Sk className="sk-logo" />
+            <Sk className="sk-line lg" style={{ width: '60%' }} />
+            <Sk className="sk-line sm" style={{ width: '40%' }} />
+            <Sk className="sk-meter" />
+          </div>
+        ))}
+      </div>
+    </Busy>
+  )
+}

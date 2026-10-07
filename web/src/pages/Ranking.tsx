@@ -1,31 +1,13 @@
-import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api, type RankingRow } from '../api'
+import { useRanking } from '../queries'
 import { RankingSkeleton } from '../components/Skeleton'
 
 // Visual order of the podium: #2 left, #1 center, #3 right.
 const PODIUM_ORDER = [1, 0, 2]
 
 export default function Ranking() {
-  const [rows, setRows] = useState<RankingRow[] | null>(null)
-  const [error, setError] = useState('')
-
-  useEffect(() => {
-    const load = () => api.ranking().then(setRows)
-    load().catch((e) => setError(e.message))
-    // Background polls never reset `rows`, so no skeleton flashes.
-    const poll = () => {
-      if (document.visibilityState === 'visible') load().catch(() => {})
-    }
-    const id = setInterval(poll, 15000)
-    document.addEventListener('visibilitychange', poll)
-    return () => {
-      clearInterval(id)
-      document.removeEventListener('visibilitychange', poll)
-    }
-  }, [])
-
-  if (error) return <p className="error">{error}</p>
+  const { data: rows, error } = useRanking() // refetches every 15 s while the tab is visible; no skeleton on refetch
+  if (error && !rows) return <p className="error">{error.message}</p>
   if (!rows) return <RankingSkeleton />
   const rest = rows.slice(3)
   const max = Math.max(1, ...rows.map((r) => r.watchedCount))
