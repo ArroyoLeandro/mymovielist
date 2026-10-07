@@ -24,7 +24,7 @@ export interface Section { slug: string; name: string; period: string; movies: M
 /** Collection with 2+ titles in the studio; titleIds are in release order. */
 export interface Saga { slug: string; name: string; posterUrl: string | null; titleIds: number[] }
 export interface Catalog { studio: { slug: string; name: string; logoUrl: string | null }; sections: Section[]; sagas: Saga[] }
-export interface Studio { slug: string; name: string; logoUrl: string | null; movieCount: number }
+export interface Studio { slug: string; name: string; logoUrl: string | null; kind?: 'studio' | 'category'; movieCount: number }
 export interface Progress { slug: string; watchedCount: number }
 export interface Entry { movieId: number; watched: boolean; score: number | null; watchedAt: string | null }
 /** Global ranking row. */

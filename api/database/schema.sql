@@ -6,6 +6,8 @@ CREATE TABLE studios (
     slug VARCHAR(50) NOT NULL,
     name VARCHAR(100) NOT NULL,
     logo_url VARCHAR(500) NULL,
+    sort_order INT NOT NULL DEFAULT 100,
+    kind VARCHAR(20) NOT NULL DEFAULT 'studio',
     PRIMARY KEY (id),
     UNIQUE KEY uq_studios_slug (slug)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

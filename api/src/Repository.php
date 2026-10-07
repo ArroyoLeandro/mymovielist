@@ -51,16 +51,16 @@ final class Repository
         return $this->user('SELECT id, tag FROM users WHERE id = ?', [$id]);
     }
 
-    /** Static (not per-user) list of studios. @return list<array{slug: string, name: string, logoUrl: string|null, movieCount: int}> */
+    /** Static (not per-user) list of studios. @return list<array{slug: string, name: string, logoUrl: string|null, kind: string, movieCount: int}> */
     public function studios(): array
     {
         $rows = $this->run(
-            'SELECT s.slug, s.name, s.logo_url, COUNT(m.id) AS movie_count
+            'SELECT s.slug, s.name, s.logo_url, s.kind, COUNT(m.id) AS movie_count
              FROM studios s
              LEFT JOIN sections sec ON sec.studio_id = s.id
              LEFT JOIN movies m ON m.section_id = sec.id
-             GROUP BY s.id, s.slug, s.name, s.logo_url
-             ORDER BY s.name',
+             GROUP BY s.id, s.slug, s.name, s.logo_url, s.kind, s.sort_order
+             ORDER BY s.sort_order, s.name',
             []
         )->fetchAll();
 
@@ -68,6 +68,7 @@ final class Repository
             'slug' => $r['slug'],
             'name' => $r['name'],
             'logoUrl' => $r['logo_url'],
+            'kind' => $r['kind'],
             'movieCount' => (int) $r['movie_count'],
         ], $rows);
     }

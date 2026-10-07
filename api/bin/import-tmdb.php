@@ -78,10 +78,14 @@ try {
                 return basename($f, '.php');
             }, glob(__DIR__ . '/../database/studios/*.php'));
             $slugs = array_values(array_filter($slugs, function ($s) {
-                return $s[0] !== '_' && !in_array($s, ['title-overrides', 'always-keep', 'franchises'], true);
+                return $s[0] !== '_' && !in_array($s, ['title-overrides', 'always-keep', 'franchises', 'saga-names', 'studio-order'], true);
             }));
-            usort($slugs, function ($a, $b) {
-                return [$a !== 'disney-xd', $a] <=> [$b !== 'disney-xd', $b]; // disney-xd claims its series first
+            // disney-xd claims its series first; the catch-all categories go last so studios keep their titles.
+            $rank = function ($s) {
+                return $s === 'disney-xd' ? 0 : (in_array($s, ['anime', 'series', 'peliculas'], true) ? 2 : 1);
+            };
+            usort($slugs, function ($a, $b) use ($rank) {
+                return [$rank($a), $a === 'anime' ? 0 : ($a === 'series' ? 1 : 2), $a] <=> [$rank($b), $b === 'anime' ? 0 : ($b === 'series' ? 1 : 2), $b];
             });
         }
         foreach ($slugs as $one) {
@@ -176,6 +180,8 @@ function importStudio(PDO $pdo, TmdbClient $tmdb, string $slug, array $opts, boo
     $overrides = require __DIR__ . '/../database/studios/title-overrides.php';
     $always = array_flip(require __DIR__ . '/../database/studios/always-keep.php');
     $franchises = require __DIR__ . '/../database/studios/franchises.php';
+    $sagaNames = require __DIR__ . '/../database/studios/saga-names.php';
+    $order = (require __DIR__ . '/../database/studios/studio-order.php')[$def['slug']] ?? [100, 'studio'];
     $today = date('Y-m-d');
 
     // Protected rows (never filtered by votes, never pruned): referenced by watch entries or any other table with a
@@ -275,11 +281,11 @@ function importStudio(PDO $pdo, TmdbClient $tmdb, string $slug, array $opts, boo
     if ($studioId === false) {
         say("Studio '{$def['slug']}' is new.");
         if (!$dry) {
-            $pdo->prepare('INSERT INTO studios (slug, name, logo_url) VALUES (?, ?, ?)')->execute([$def['slug'], $def['name'], $logo]);
+            $pdo->prepare('INSERT INTO studios (slug, name, logo_url, sort_order, kind) VALUES (?, ?, ?, ?, ?)')->execute([$def['slug'], $def['name'], $logo, $order[0], $order[1]]);
             $studioId = $pdo->lastInsertId();
         }
     } elseif (!$dry) {
-        $pdo->prepare('UPDATE studios SET name = ?, logo_url = ? WHERE id = ?')->execute([$def['name'], $logo, $studioId]);
+        $pdo->prepare('UPDATE studios SET name = ?, logo_url = ?, sort_order = ?, kind = ? WHERE id = ?')->execute([$def['name'], $logo, $order[0], $order[1], $studioId]);
     }
     say('Logo: ' . ($logo ?? '(none, UI falls back to the name)'));
 
@@ -319,7 +325,6 @@ function importStudio(PDO $pdo, TmdbClient $tmdb, string $slug, array $opts, boo
             $key = $item['media'] . ':' . $item['tmdb'];
             $order = $pos + 1;
             $row = $existing[$key] ?? null;
-            $collectionId = ensureCollection($pdo, $tmdb, $item, $franchiseOf, $franchises, $dry);
             $label = sprintf('%s -> %s (%d) poster:%s', $item['original'] ?? $item['title'], $item['title'], $item['year'], $item['poster_country'] ?? ($item['poster'] ? 'none' : 'MISSING'));
             if ($row !== null && $studioId !== false && (int) $row['studio_id'] !== (int) $studioId && !isset($opts['move'])) {
                 $n['foreign']++;
@@ -327,6 +332,7 @@ function importStudio(PDO $pdo, TmdbClient $tmdb, string $slug, array $opts, boo
                 continue;
             }
             $keep[$key] = true;
+            $collectionId = ensureCollection($pdo, $tmdb, $item, $franchiseOf, $franchises, $sagaNames, $dry);
             if ($row === null) {
                 $n['new']++;
                 if ($verbose) {
@@ -476,7 +482,7 @@ function franchiseMap(array $franchises): array
  * Collection row (saga) for an item: a manual franchise wins over TMDB belongs_to_collection.
  * Creates the row when missing (not on dry runs, where 0 stands for "would be created"). Memoized per run.
  */
-function ensureCollection(PDO $pdo, TmdbClient $tmdb, array $item, array $franchiseOf, array $franchises, bool $dry): ?int
+function ensureCollection(PDO $pdo, TmdbClient $tmdb, array $item, array $franchiseOf, array $franchises, array $sagaNames, bool $dry): ?int
 {
     static $memo = [];
     $slug = $franchiseOf[($item['media'] === 'series' ? 'tv' : 'movie') . ':' . $item['tmdb']]
@@ -490,6 +496,7 @@ function ensureCollection(PDO $pdo, TmdbClient $tmdb, array $item, array $franch
     }
     if ($slug !== null) {
         $f = $franchises[$slug];
+        $f['name'] = $sagaNames[$slug] ?? $f['name'];
         $sel = $pdo->prepare('SELECT id, name, poster_url FROM collections WHERE slug = ?');
         $sel->execute([$slug]);
         $row = $sel->fetch();
@@ -502,13 +509,13 @@ function ensureCollection(PDO $pdo, TmdbClient $tmdb, array $item, array $franch
         }
         return $memo[$mk] = $row ? (int) $row['id'] : 0;
     }
-    $sel = $pdo->prepare('SELECT id FROM collections WHERE tmdb_collection_id = ?');
+    $sel = $pdo->prepare('SELECT id, name FROM collections WHERE tmdb_collection_id = ?');
     $sel->execute([$item['collection']]);
-    $id = $sel->fetchColumn();
-    if ($id !== false) {
-        return $memo[$mk] = (int) $id;
+    $row = $sel->fetch();
+    if ($row && $dry) {
+        return $memo[$mk] = (int) $row['id'];
     }
-    if ($dry) {
+    if (!$row && $dry) {
         return $memo[$mk] = 0;
     }
     $d = $tmdb->get('/collection/' . $item['collection'], [
@@ -517,13 +524,57 @@ function ensureCollection(PDO $pdo, TmdbClient $tmdb, array $item, array $franch
         'include_image_language' => 'es,null',
     ]);
     if (isset($d['_not_found']) || empty($d['id'])) {
-        return $memo[$mk] = null;
+        return $memo[$mk] = $row ? (int) $row['id'] : null;
     }
-    $name = TmdbResolver::title($d, 'tv', []); // same LATAM-first precedence (fields: name / original_name)
-    $name = trim((string) preg_replace('/\s*(?:[-:–]\s*)?\(?\b(?:colecci[oó]n|collection|saga)\b\)?\s*$/iu', '', $name)) ?: $name;
+    $name = $sagaNames['collection:' . (int) $d['id']] ?? collectionName($d);
+    if ($row) {
+        if ($row['name'] !== $name) {
+            $pdo->prepare('UPDATE collections SET name = ? WHERE id = ?')->execute([$name, $row['id']]);
+        }
+        return $memo[$mk] = (int) $row['id'];
+    }
     $pdo->prepare('INSERT INTO collections (tmdb_collection_id, slug, name, poster_url) VALUES (?, ?, ?, ?)')
         ->execute([(int) $d['id'], 'tmdb-' . (int) $d['id'], $name, TmdbResolver::poster($d)['url']]);
     return $memo[$mk] = (int) $pdo->lastInsertId();
+}
+
+/** Saga name: /collection?language=es-MX name when translated, else the es-MX / any es translation, else the original. */
+function collectionName(array $d): string
+{
+    $strip = function ($n) {
+        $n = trim((string) $n);
+        return trim((string) preg_replace('/\s*(?:[-:–]\s*)?\(?\b(?:colecci[oó]n|collection|saga)\b\)?\s*$/iu', '', $n)) ?: $n;
+    };
+    $byRegion = [];
+    foreach ($d['translations']['translations'] ?? [] as $t) {
+        if (($t['iso_639_1'] ?? '') === 'es') {
+            $n = trim((string) ($t['data']['name'] ?? $t['data']['title'] ?? ''));
+            if ($n !== '' && !isset($byRegion[$t['iso_3166_1'] ?? ''])) {
+                $byRegion[$t['iso_3166_1'] ?? ''] = $n;
+            }
+        }
+    }
+    $main = trim((string) ($d['name'] ?? ''));
+    $english = null;
+    foreach ($d['translations']['translations'] ?? [] as $t) {
+        if (($t['iso_639_1'] ?? '') === 'en' && trim((string) ($t['data']['name'] ?? '')) !== '') {
+            $english = trim((string) $t['data']['name']);
+            break;
+        }
+    }
+    if (isset($byRegion['MX'])) {
+        return $strip($byRegion['MX']);
+    }
+    if ($main !== '' && $english !== null && preg_match('/[\x{3040}-\x{30ff}\x{4e00}-\x{9fff}]/u', $main)) {
+        return $strip($english); // untranslated Japanese name: use the English one
+    }
+    if ($main !== '' && $main !== $english) { // the es-MX response differs from the English text: it is translated
+        return $strip($main);
+    }
+    if ($byRegion) {
+        return $strip(reset($byRegion));
+    }
+    return $strip($main);
 }
 
 /** A section has one 'source' or several 'sources' (merged, first occurrence wins). */
@@ -587,6 +638,12 @@ function collectIds(TmdbClient $tmdb, array $source, string $today): array
     for ($page = 1; $page <= $maxPages; $page++) {
         $res = $tmdb->get('/discover/' . $media, $params + ['page' => $page]);
         foreach ($res['results'] ?? [] as $r) {
+            // Optional client-side filter on the primary (first) genre: 'primary_genre' => [ids], 'primary_genre_not' => [ids].
+            $g = (int) (($r['genre_ids'] ?? [])[0] ?? 0);
+            if ((isset($source['primary_genre']) && !in_array($g, (array) $source['primary_genre'], true))
+                || (isset($source['primary_genre_not']) && in_array($g, $source['primary_genre_not'], true))) {
+                continue;
+            }
             $refs[] = ['media' => $media, 'id' => (int) $r['id']];
         }
         if ($page >= (int) ($res['total_pages'] ?? 1)) {
