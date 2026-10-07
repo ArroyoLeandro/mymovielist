@@ -47,7 +47,7 @@ export interface Highlights {
 export interface ListEntry {
   movie: {
     id: number; title: string; originalTitle: string | null; year: number; posterUrl: string | null
-    mediaType: 'movie' | 'tv'
+    mediaType: 'movie' | 'series'
     studio: { slug: string; name: string }
     section: { slug: string; name: string }
   }

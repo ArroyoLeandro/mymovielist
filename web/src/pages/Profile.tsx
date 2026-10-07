@@ -6,7 +6,7 @@ import StudioLogo from '../components/StudioLogo'
 import { ProfileSkeleton } from '../components/Skeleton'
 
 type Sort = 'score' | 'title' | 'year' | 'recent'
-type Kind = 'all' | 'movie' | 'tv'
+type Kind = 'all' | 'movie' | 'series'
 
 const SORTS: Record<Sort, (a: ListEntry, b: ListEntry) => number> = {
   score: (a, b) => (b.score ?? -1) - (a.score ?? -1) || a.movie.title.localeCompare(b.movie.title),
@@ -26,7 +26,7 @@ function Row({ e }: { e: ListEntry }) {
         <span className="tags">
           <span className="tag studio">{m.studio.name}</span>
           <span className="tag">{m.section.name}</span>
-          {m.mediaType === 'tv' && <span className="tag series">Serie</span>}
+          {m.mediaType === 'series' && <span className="tag series">Serie</span>}
         </span>
       </div>
       <span className={`score-pill ${e.score === null ? 'none' : ''}`}>{e.score ?? 'Sin puntaje'}</span>
@@ -122,7 +122,7 @@ export default function Profile() {
             <select value={kind} onChange={(e) => setKind(e.target.value as Kind)} aria-label="Tipo">
               <option value="all">Todo</option>
               <option value="movie">Películas</option>
-              <option value="tv">Series</option>
+              <option value="series">Series</option>
             </select>
             <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="Ordenar por">
               <option value="score">Puntaje</option>
