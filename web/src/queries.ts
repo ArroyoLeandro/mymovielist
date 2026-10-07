@@ -13,5 +13,8 @@ export const useCatalog = (slug: string) =>
 // Dynamic data.
 export const useProgress = () => useQuery({ queryKey: ['progress'], queryFn: api.progress })
 
-export const useRanking = () =>
-  useQuery({ queryKey: ['ranking'], queryFn: api.ranking, refetchInterval: 15000, refetchIntervalInBackground: false })
+export const useRanking = (studio?: string) =>
+  useQuery({ queryKey: ['ranking', studio ?? 'global'], queryFn: () => api.ranking(studio), refetchInterval: 15000, refetchIntervalInBackground: false })
+
+export const useHighlights = () =>
+  useQuery({ queryKey: ['highlights'], queryFn: api.highlights, refetchInterval: 30000, refetchIntervalInBackground: false })

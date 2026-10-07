@@ -99,7 +99,14 @@ try {
             ? $repo->saveEntry($current['id'], $movieId, $score)
             : $repo->removeEntry($current['id'], $movieId));
     } elseif ($path === '/api/ranking' && $method === 'GET') {
-        Http::json($repo->ranking());
+        $slug = isset($_GET['studio']) && is_string($_GET['studio']) && $_GET['studio'] !== '' ? $_GET['studio'] : null;
+        $rows = $repo->ranking($slug);
+        if ($rows === null) {
+            throw new HttpError(404, 'Studio not found.');
+        }
+        Http::json($rows);
+    } elseif ($path === '/api/highlights' && $method === 'GET') {
+        Http::json($repo->highlights());
     } elseif ($method === 'GET' && preg_match('#^/api/users/([A-Za-z0-9_-]+)/list$#', $path, $m)) {
         $user = $repo->userByTag($m[1]);
         if ($user === null) {

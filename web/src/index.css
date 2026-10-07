@@ -225,6 +225,23 @@ input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px #f
 .pod-1 .pod-place { font-size: 2.8rem; }
 .pod-empty { visibility: hidden; }
 .ranking[start] { margin-top: 8px; }
+.who-box { display: grid; min-width: 0; }
+.who-box small { color: var(--muted); font-size: 0.75rem; }
+.rk-tabs { margin: 16px 0 0; padding-bottom: 2px; }
+.rk-kind { margin-top: 14px; justify-self: start; display: inline-flex; }
+.pod-extra { font-size: 0.7rem; color: var(--muted); line-height: 1.3; }
+.highlights { margin-top: 40px; }
+.hl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin-top: 12px; }
+.hl-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; display: grid; gap: 4px; align-content: start; min-width: 0; }
+.hl-label { margin: 0; font-size: 0.75rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--gold); font-weight: 700; }
+.hl-main { margin: 0; font-family: var(--display); font-weight: 700; font-size: 1.1rem; overflow-wrap: anywhere; }
+.hl-sub { margin: 0; font-size: 0.82rem; color: var(--muted); }
+.hl-pct { color: var(--gold); font-size: 1.05rem; }
+.hl-movie { display: grid; grid-template-columns: 52px 1fr; gap: 12px; align-items: center; }
+.hl-thumb { width: 52px; border-radius: 8px; font-size: 1.2rem; }
+.hl-spread { margin: 4px 0 0; display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 0.78rem; color: var(--muted); }
+.hl-spread b { color: var(--text); }
+.sk-hl { height: 92px; border-radius: var(--radius); }
 
 /* ---------- skeletons ---------- */
 .sk {

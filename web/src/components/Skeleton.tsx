@@ -49,11 +49,11 @@ export function CatalogSkeleton() {
   )
 }
 
-export function RankingSkeleton() {
+export function RankingSkeleton({ bare = false }: { bare?: boolean }) {
   return (
     <Busy label="Cargando ranking">
-      <Sk className="sk-title" />
-      <Sk className="sk-line" style={{ width: 180, marginTop: 10 }} />
+      {!bare && <Sk className="sk-title" />}
+      {!bare && <Sk className="sk-line" style={{ width: 180, marginTop: 10 }} />}
       <div className="podium" aria-hidden="true">
         {[2, 1, 3].map((p) => (
           <div key={p} className={`pod pod-${p}`}>

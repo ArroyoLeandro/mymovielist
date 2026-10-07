@@ -24,7 +24,26 @@ export interface Catalog { studio: { slug: string; name: string; logoUrl: string
 export interface Studio { slug: string; name: string; logoUrl: string | null; movieCount: number }
 export interface Progress { slug: string; watchedCount: number }
 export interface Entry { movieId: number; watched: boolean; score: number | null; watchedAt: string | null }
-export interface RankingRow { tag: string; watchedCount: number; averageScore: number | null }
+/** Global ranking row. */
+export interface GlobalRankingRow {
+  tag: string
+  watchedCount: number
+  moviesWatched: number
+  seriesWatched: number
+  averageScore: number | null
+  leaderOf: number
+}
+/** Per-studio ranking row (% of the studio's titles watched). */
+export interface StudioRankingRow { tag: string; watchedCount: number; totalCount: number; percent: number; averageScore: number | null }
+export type RankingRow = GlobalRankingRow & StudioRankingRow
+interface HlMovie { id: number; title: string; year: number; posterUrl: string | null }
+export interface Highlights {
+  mostGenerous: { tag: string; average: number; count: number } | null
+  mostDemanding: { tag: string; average: number; count: number } | null
+  controversial: { movie: HlMovie; stdev: number; scores: { tag: string; score: number }[] } | null
+  favorite: { movie: HlMovie; average: number; votes: number } | null
+  soulmates: { a: string; b: string; common: number; match: number } | null
+}
 export interface ListEntry {
   movie: { id: number; title: string; originalTitle: string | null; year: number; posterUrl: string | null }
   score: number | null
@@ -81,6 +100,7 @@ export const api = {
   ratings: (slug: string) => request<RatingRow[]>('GET', `/studios/${encodeURIComponent(slug)}/ratings`),
   saveEntry: (id: number, watched: boolean, score: number | null) =>
     request<Entry>('PUT', `/movies/${id}/entry`, { watched, score }),
-  ranking: () => request<RankingRow[]>('GET', '/ranking'),
+  ranking: (studio?: string) => request<RankingRow[]>('GET', studio ? `/ranking?studio=${encodeURIComponent(studio)}` : '/ranking'),
+  highlights: () => request<Highlights>('GET', '/highlights'),
   userList: (tag: string) => request<UserList>('GET', `/users/${encodeURIComponent(tag)}/list`),
 }
