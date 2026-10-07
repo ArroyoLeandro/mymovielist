@@ -5,6 +5,7 @@ CREATE TABLE studios (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT,
     slug VARCHAR(50) NOT NULL,
     name VARCHAR(100) NOT NULL,
+    logo_url VARCHAR(500) NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uq_studios_slug (slug)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -27,11 +28,14 @@ CREATE TABLE movies (
     title VARCHAR(200) NOT NULL,
     original_title VARCHAR(200) NULL,
     year SMALLINT NOT NULL,
+    media_type ENUM('movie','series') NOT NULL DEFAULT 'movie',
+    tmdb_id INT UNSIGNED NULL,
     wiki_title VARCHAR(200) NULL,
     poster_url VARCHAR(500) NULL,
     sort_order INT NOT NULL DEFAULT 0,
     PRIMARY KEY (id),
     KEY idx_movies_section (section_id, sort_order),
+    UNIQUE KEY uq_movies_media_tmdb (media_type, tmdb_id),
     CONSTRAINT fk_movies_section FOREIGN KEY (section_id) REFERENCES sections (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
