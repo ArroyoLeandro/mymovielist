@@ -9,8 +9,13 @@ final class Auth
 {
     private const LIFETIME = 60 * 60 * 24 * 30;
 
-    public function __construct(private readonly string $passwordHash, private readonly string $sessionName)
+    private string $passwordHash;
+    private string $sessionName;
+
+    public function __construct(string $passwordHash, string $sessionName)
     {
+        $this->passwordHash = $passwordHash;
+        $this->sessionName = $sessionName;
     }
 
     public function start(): void

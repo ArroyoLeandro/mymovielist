@@ -4,6 +4,9 @@ DirectoryIndex index.html
 <IfModule mod_rewrite.c>
   RewriteEngine On
 
+  # Private app folder (code, config, SQL) is never served.
+  RewriteRule ^_app(/|$) - [F,L]
+
   # API requests go to the PHP shim.
   RewriteRule ^api(/.*)?$ api/index.php [L]
 

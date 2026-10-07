@@ -2,7 +2,7 @@
 
 A private movie tracker for a group of friends. Browse catalogs by studio (Disney first), mark movies as watched, score them 1-10, see everyone's "My Movie List" and a ranking of who watched the most.
 
-- `api/` - PHP 8.2 backend (plain front controller + PDO, MySQL).
+- `api/` - PHP 7.4+ backend (plain front controller + PDO, MySQL).
 - `web/` - React + Vite + TypeScript SPA.
 - `deploy/` - web-root `.htaccess`, `/api` shim and `build.sh` for shared hosting.
 
@@ -10,7 +10,7 @@ Access is a shared group password plus a user tag. An unknown tag is registered 
 
 ## Local setup
 
-Requirements: Docker, PHP 8.2 (with `pdo_mysql`), Node 20+.
+Requirements: Docker, PHP 7.4+ (with `pdo_mysql`), Node 20+.
 
 ```bash
 docker compose up -d                       # MySQL 8.4 with schema + seed (dev credentials only)
@@ -31,11 +31,10 @@ The seed only runs on the first start of the database volume. To reset: `docker 
 
 1. Create a subdomain, e.g. `movies.example.com`. Create a MySQL database and user in hPanel and import `api/database/schema.sql` then `api/database/seed.sql` (phpMyAdmin).
 2. Run `bash deploy/build.sh`. It produces:
-   - `build/public/` - the web root contents (SPA, `.htaccess`, `api/index.php` shim).
-   - `build/disney-app/` - the backend.
-3. Upload `build/public/*` (including the hidden `.htaccess`) into the subdomain's web root.
-4. Upload `build/disney-app/` as a **sibling of the web root**, i.e. in the web root's parent folder, named `disney-app`. It must not be inside the web root: it holds the DB credentials. If you use another location, edit `APP_DIR` in the web root's `api/index.php`.
-5. On the server, copy `disney-app/config/config.example.php` to `config.php`, set the real DB host/name/user/password (host `127.0.0.1`) and generate `site_password_hash` with `php bin/hash-password.php "password"` (run it locally, paste the hash).
+   - `build/public/` - the web root contents (SPA, `.htaccess`, `api/index.php` shim) plus `_app/`, the backend.
+3. Upload everything in `build/public/` (including the hidden `.htaccess` files) into the subdomain's web root. `_app/` stays inside the web root because shared hosting uploads cannot go above it; both `.htaccess` files deny every request to it (verify `/_app/config/config.php` returns 403).
+4. Subdomains on shared hosting usually inherit the parent domain's PHP version; the code runs on PHP 7.4+, so there is no need to change it.
+5. On the server, copy `_app/config/config.example.php` to `config.php`, set the real DB name/user/password (host `localhost`) and generate `site_password_hash` with `php bin/hash-password.php "password"` (run it locally, paste the hash).
 6. Open the subdomain, log in. Enable HTTPS in hPanel so the session cookie is protected.
 
 ## Add a new studio

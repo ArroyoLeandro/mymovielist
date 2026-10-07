@@ -64,7 +64,10 @@ try {
     } elseif ($path === '/api/studios' && $method === 'GET') {
         Http::json($repo->studios());
     } elseif ($method === 'GET' && preg_match('#^/api/studios/([a-z0-9-]+)/movies$#', $path, $m)) {
-        $studio = $repo->studioBySlug($m[1]) ?? throw new HttpError(404, 'Studio not found.');
+        $studio = $repo->studioBySlug($m[1]);
+        if ($studio === null) {
+            throw new HttpError(404, 'Studio not found.');
+        }
         Http::json([
             'studio' => ['slug' => $studio['slug'], 'name' => $studio['name']],
             'sections' => $repo->catalog($studio['id'], $current['id']),
@@ -92,7 +95,10 @@ try {
     } elseif ($path === '/api/ranking' && $method === 'GET') {
         Http::json($repo->ranking());
     } elseif ($method === 'GET' && preg_match('#^/api/users/([A-Za-z0-9_-]+)/list$#', $path, $m)) {
-        $user = $repo->userByTag($m[1]) ?? throw new HttpError(404, 'User not found.');
+        $user = $repo->userByTag($m[1]);
+        if ($user === null) {
+            throw new HttpError(404, 'User not found.');
+        }
         Http::json($repo->userList($user));
     }
 

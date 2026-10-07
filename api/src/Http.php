@@ -7,16 +7,21 @@ namespace App;
 /** Error that maps directly to an HTTP status and a JSON message. */
 final class HttpError extends \RuntimeException
 {
-    public function __construct(public readonly int $status, string $message)
+    /** @var int */
+    public $status;
+
+    public function __construct(int $status, string $message)
     {
         parent::__construct($message);
+        $this->status = $status;
     }
 }
 
 /** Minimal JSON request/response helpers. */
 final class Http
 {
-    public static function json(mixed $data, int $status = 200): never
+    /** @param mixed $data */
+    public static function json($data, int $status = 200): void
     {
         http_response_code($status);
         header('Content-Type: application/json; charset=utf-8');
@@ -25,7 +30,7 @@ final class Http
         exit;
     }
 
-    public static function noContent(): never
+    public static function noContent(): void
     {
         http_response_code(204);
         exit;
@@ -35,7 +40,7 @@ final class Http
     public static function jsonBody(): array
     {
         $type = strtolower($_SERVER['CONTENT_TYPE'] ?? '');
-        if (!str_starts_with($type, 'application/json')) {
+        if (strpos($type, 'application/json') !== 0) {
             throw new HttpError(415, 'Content-Type must be application/json.');
         }
         $data = json_decode((string) file_get_contents('php://input'), true);

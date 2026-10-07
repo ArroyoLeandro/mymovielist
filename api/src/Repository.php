@@ -10,8 +10,11 @@ use PDOException;
 /** All SQL lives here. Portable across MySQL and SQLite. */
 final class Repository
 {
-    public function __construct(private readonly PDO $pdo)
+    private PDO $pdo;
+
+    public function __construct(PDO $pdo)
     {
+        $this->pdo = $pdo;
     }
 
     /** @return array{id: int, tag: string} */
@@ -29,7 +32,11 @@ final class Repository
         } catch (PDOException $e) {
             // Lost a race with a concurrent registration of the same tag: fall through to the lookup.
         }
-        return $this->userByTag($tag) ?? throw new \RuntimeException('Could not register user.');
+        $user = $this->userByTag($tag);
+        if ($user === null) {
+            throw new \RuntimeException('Could not register user.');
+        }
+        return $user;
     }
 
     /** @return array{id: int, tag: string}|null */
@@ -235,7 +242,8 @@ final class Repository
         return $stmt;
     }
 
-    private static function avg(mixed $value): ?float
+    /** @param mixed $value */
+    private static function avg($value): ?float
     {
         return $value === null ? null : round((float) $value, 2);
     }
