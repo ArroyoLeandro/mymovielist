@@ -45,7 +45,12 @@ export interface Highlights {
   soulmates: { a: string; b: string; common: number; match: number } | null
 }
 export interface ListEntry {
-  movie: { id: number; title: string; originalTitle: string | null; year: number; posterUrl: string | null }
+  movie: {
+    id: number; title: string; originalTitle: string | null; year: number; posterUrl: string | null
+    mediaType: 'movie' | 'tv'
+    studio: { slug: string; name: string }
+    section: { slug: string; name: string }
+  }
   score: number | null
   watchedAt: string
 }
@@ -56,6 +61,7 @@ export interface UserList {
     totalMovies: number
     averageScore: number | null
     scoreDistribution: Record<string, number>
+    byStudio: { slug: string; name: string; logoUrl: string | null; watched: number; total: number; avgScore: number | null }[]
   }
   entries: ListEntry[]
 }

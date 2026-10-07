@@ -382,3 +382,22 @@ input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px #f
   .logo-tile { height: 72px; }
   .logo-tile.wordmark span { font-size: 1.15rem; }
 }
+
+/* ---------- profile: studio filters, groups, tags ---------- */
+.stats .studio-bars { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 22px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 22px; }
+.sbar { display: grid; grid-template-columns: 84px 1fr auto; align-items: center; gap: 8px; font-size: 0.78rem; color: var(--muted); }
+.sbar-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sbar-track { height: 6px; border-radius: 3px; background: var(--panel-2); overflow: hidden; }
+.sbar-track i { display: block; height: 100%; background: linear-gradient(90deg, var(--gold), var(--rose)); }
+.profile-filters { margin-top: 0; }
+.filter-row { display: flex; gap: 8px; margin: 12px 0 18px; }
+.filter-row select { background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; color: var(--text); font-size: 0.85rem; }
+.studio-head { align-items: center; }
+.logo-tile.mini { width: 40px; height: 22px; padding: 2px 4px; margin-right: 10px; border-radius: 5px; font-size: 0.55rem; }
+.logo-tile.mini img { max-height: 100%; max-width: 100%; object-fit: contain; }
+.era .list { margin-bottom: 22px; }
+.tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.tag { font-size: 0.68rem; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.tag.studio { color: var(--gold); border-color: #ffc94d55; }
+.tag.series { color: var(--rose); border-color: #ff7aa855; }
+@media (max-width: 640px) { .profile-filters { margin-inline: -14px; padding: 6px 14px; } }

@@ -442,9 +442,13 @@ final class Repository
     public function userList(array $user): array
     {
         $rows = $this->run(
-            'SELECT m.id, m.title, m.original_title, m.year, m.poster_url, e.score, e.watched_at
+            'SELECT m.id, m.title, m.original_title, m.year, m.poster_url, m.media_type, e.score, e.watched_at,
+                    sec.slug AS section_slug, sec.name AS section_name,
+                    s.slug AS studio_slug, s.name AS studio_name, s.logo_url
              FROM watch_entries e
              JOIN movies m ON m.id = e.movie_id
+             JOIN sections sec ON sec.id = m.section_id
+             JOIN studios s ON s.id = sec.studio_id
              WHERE e.user_id = ?
              ORDER BY e.watched_at DESC, m.id',
             [$user['id']]
@@ -454,12 +458,23 @@ final class Repository
         $sum = 0;
         $scored = 0;
         $entries = [];
+        $studios = [];
         foreach ($rows as $r) {
             $score = $r['score'] === null ? null : (int) $r['score'];
             if ($score !== null) {
                 $distribution[$score]++;
                 $sum += $score;
                 $scored++;
+            }
+            $k = $r['studio_slug'];
+            if (!isset($studios[$k])) {
+                $studios[$k] = ['slug' => $k, 'name' => $r['studio_name'], 'logoUrl' => $r['logo_url'],
+                    'watched' => 0, 'sum' => 0, 'scored' => 0];
+            }
+            $studios[$k]['watched']++;
+            if ($score !== null) {
+                $studios[$k]['sum'] += $score;
+                $studios[$k]['scored']++;
             }
             $entries[] = [
                 'movie' => [
@@ -468,6 +483,9 @@ final class Repository
                     'originalTitle' => $r['original_title'],
                     'year' => (int) $r['year'],
                     'posterUrl' => $r['poster_url'],
+                    'mediaType' => $r['media_type'],
+                    'studio' => ['slug' => $r['studio_slug'], 'name' => $r['studio_name']],
+                    'section' => ['slug' => $r['section_slug'], 'name' => $r['section_name']],
                 ],
                 'score' => $score,
                 'watchedAt' => self::iso($r['watched_at']),
@@ -476,6 +494,24 @@ final class Repository
 
         $total = (int) $this->run('SELECT COUNT(*) FROM movies', [])->fetchColumn();
 
+        $totals = $this->run(
+            'SELECT s.slug, COUNT(m.id) AS total
+             FROM studios s
+             JOIN sections sec ON sec.studio_id = s.id
+             JOIN movies m ON m.section_id = sec.id
+             GROUP BY s.id, s.slug',
+            []
+        )->fetchAll(PDO::FETCH_KEY_PAIR);
+        $byStudio = [];
+        foreach ($studios as $st) {
+            $byStudio[] = [
+                'slug' => $st['slug'], 'name' => $st['name'], 'logoUrl' => $st['logoUrl'],
+                'watched' => $st['watched'], 'total' => (int) ($totals[$st['slug']] ?? 0),
+                'avgScore' => $st['scored'] > 0 ? round($st['sum'] / $st['scored'], 2) : null,
+            ];
+        }
+        usort($byStudio, fn(array $a, array $b) => $b['watched'] <=> $a['watched'] ?: strcmp($a['name'], $b['name']));
+
         return [
             'user' => ['tag' => $user['tag']],
             'stats' => [
@@ -483,6 +519,7 @@ final class Repository
                 'totalMovies' => $total,
                 'averageScore' => $scored > 0 ? round($sum / $scored, 2) : null,
                 'scoreDistribution' => $distribution,
+                'byStudio' => $byStudio,
             ],
             'entries' => $entries,
         ];
