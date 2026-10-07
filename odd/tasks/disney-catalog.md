@@ -76,5 +76,15 @@ User request (2026-10-07): all Disney studios under `/disney`; every movie (exis
 
 - T14 done: php -l OK on Repository.php and index.php (php:7.4-cli); `npm run build` passes; local API list returns studio/section/mediaType per entry and stats.byStudio. No browser E2E run.
 
+- Phase 2 deployed to prod (main @ f8209df): MariaDB migrated, 13 studios / 1456 titles, 325 watch entries identical. Backup backups/prod-20261007-184808-pre-deploy.sql.
+
+### Phase 3 — Navigation, curation, sagas, new catalogs, profile (branch `feat/phase3-catalog`)
+User decisions (2026-10-07): studio page = 3 tabs (Sagas as rows with progress, Películas, Series); curation keeps movies with ≥500 TMDB votes and series with ≥100, never deletes titles with watched/pending/recommended data, plus a manual always-keep list; home = global catalog in themed rows (most watched by the group, your pending, best rated by the group, popular sagas) + "Ver todo" grid with filters; current home moves to /estudios; global search in the header; back button; scroll-to-top on navigation + floating button; Anime category (series ≥200 votes or ≥100 if first aired before 2005, movies ≥500, excluding Ghibli; manual franchise map for series sagas); general Series (≥1000 votes) and Películas (≥5000 votes) organized by genre, deduplicated against studios; profile tabs Vistas / Pendientes / Recomendadas / Mis recomendaciones; recommend to 1+ friends with optional note, no notification/counter, show whether the friend watched it.
+- [ ] T15 — Curation: store TMDB vote_count/popularity, threshold pruning protecting user data, always-keep list. Route: delegated (writer A).
+- [ ] T16 — Sagas: collections model (TMDB belongs_to_collection + manual franchise map for series), studio page tabs Sagas/Películas/Series with saga rows. Route: delegated (writer A).
+- [ ] T17 — New catalogs: Anime, Series (by genre), Películas (by genre, with sagas). Route: delegated (writer B).
+- [ ] T18 — Navigation: global home rows + Ver todo grid, /estudios, header global search, back button, scroll restoration + back-to-top. Route: delegated (writer C).
+- [ ] T19 — Profile tabs + watchlist (pending) + recommendations with optional note. Route: delegated (writer C).
+
 ## Next step
-User tests in the browser locally. Then deploy to Hostinger subdomain via MCP (pending explicit user request + subdomain). RDD review deferred: user asked for speed and validation at the end.
+T15–T16 (writer A), then T17 (writer B), then T18–T19 (writer C); local test on a prod copy; user confirms before deploy.
