@@ -43,6 +43,9 @@ export class ApiError extends Error {
 let onUnauthorized: () => void = () => {}
 export const setUnauthorizedHandler = (fn: () => void) => { onUnauthorized = fn }
 
+const errorText = (status: number) =>
+  status === 401 ? 'Tu sesión expiró. Vuelve a entrar.' : status === 404 ? 'No se encontró lo que buscas.' : `No se pudo completar la solicitud (${status}).`
+
 async function request<T>(method: string, path: string, body?: unknown, quiet401 = false): Promise<T> {
   const res = await fetch(`/api${path}`, {
     method,
@@ -54,7 +57,7 @@ async function request<T>(method: string, path: string, body?: unknown, quiet401
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
     if (res.status === 401 && !quiet401) onUnauthorized()
-    throw new ApiError(res.status, data.error ?? `Request failed (${res.status})`)
+    throw new ApiError(res.status, errorText(res.status))
   }
   return data as T
 }

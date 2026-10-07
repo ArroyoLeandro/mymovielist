@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { api, type Catalog as CatalogData, type Movie } from '../api'
 import { useAuth } from '../auth'
 import Poster from '../components/Poster'
+import { CatalogSkeleton } from '../components/Skeleton'
 
 type Filter = 'all' | 'watched' | 'unwatched'
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
@@ -79,20 +80,20 @@ export default function Catalog() {
     (!q || norm(m.title).includes(q) || norm(m.originalTitle ?? '').includes(q))
 
   if (error) return <p className="error">{error}</p>
-  if (!data) return <p className="muted">Loading…</p>
+  if (!data) return <CatalogSkeleton />
 
   return (
     <>
       <div className="toolbar">
         <div className="progress">
-          <div className="progress-text"><h1 className="title">{data.studio.name}</h1><span>{watchedCount}/{all.length} watched &middot; {pct}%</span></div>
+          <div className="progress-text"><h1 className="title">{data.studio.name}</h1><span>{watchedCount}/{all.length} vistas &middot; {pct}%</span></div>
           <div className="meter"><i style={{ width: `${pct}%` }} /></div>
         </div>
-        <input type="search" placeholder="Search by title" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search by title" />
-        <div className="seg" role="group" aria-label="Filter">
+        <input type="search" placeholder="Buscar por título" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Buscar por título" />
+        <div className="seg" role="group" aria-label="Filtro">
           {(['all', 'watched', 'unwatched'] as Filter[]).map((f) => (
             <button key={f} className={filter === f ? 'on' : ''} onClick={() => setFilter(f)}>
-              {f === 'all' ? 'All' : f === 'watched' ? 'Watched' : 'Not watched'}
+              {f === 'all' ? 'Todas' : f === 'watched' ? 'Vistas' : 'Sin ver'}
             </button>
           ))}
         </div>
@@ -110,12 +111,12 @@ export default function Catalog() {
           </section>
         )
       })}
-      {all.filter(visible).length === 0 && <p className="muted">No movies match. Clear the search or change the filter.</p>}
+      {all.filter(visible).length === 0 && <p className="muted">No hay títulos que coincidan. Borra la búsqueda o cambia el filtro.</p>}
     </>
   )
 }
 
-const LABELS = ['Awful', 'Bad', 'Poor', 'Meh', 'Okay', 'Decent', 'Good', 'Great', 'Excellent', 'Masterpiece']
+const LABELS = ['Horrible', 'Malo', 'Flojo', 'Regular', 'Pasable', 'Decente', 'Bueno', 'Muy bueno', 'Excelente', 'Obra maestra']
 const tier = (s: number | null) => (s === null ? '' : s <= 4 ? 'low' : s <= 7 ? 'mid' : 'high')
 
 function Card({ movie: m, me, onSave }: { movie: Movie; me?: string; onSave: (m: Movie, watched: boolean, score: number | null) => Promise<boolean> }) {
@@ -148,7 +149,7 @@ function Card({ movie: m, me, onSave }: { movie: Movie; me?: string; onSave: (m:
         <button
           className={`check ${m.watched ? 'on' : ''}`}
           aria-pressed={m.watched}
-          aria-label={m.watched ? `Unmark ${m.title} as watched` : `Mark ${m.title} as watched`}
+          aria-label={m.watched ? `Quitar ${m.title} de las vistas` : `Marcar ${m.title} como vista`}
           onClick={() => onSave(m, !m.watched, null)}
         >
           {m.watched ? '✓' : '+'}
@@ -158,15 +159,15 @@ function Card({ movie: m, me, onSave }: { movie: Movie; me?: string; onSave: (m:
       <p className="year">{m.year}{m.originalTitle ? ` · ${m.originalTitle}` : ''}</p>
       <p className="score-read" aria-live="polite">
         <strong>{shown ?? '–'}</strong>
-        <span>{shown ? LABELS[shown - 1] : m.watched ? 'No score yet' : 'Tap to rate'}</span>
+        <span>{shown ? LABELS[shown - 1] : m.watched ? 'Sin puntaje' : 'Toca para puntuar'}</span>
       </p>
-      <div className="scores" role="group" aria-label="Your score" ref={group} onKeyDown={onKey} onMouseLeave={() => setHover(null)}>
+      <div className="scores" role="group" aria-label="Tu puntaje" ref={group} onKeyDown={onKey} onMouseLeave={() => setHover(null)}>
         {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
           <button
             key={n}
             className={`${m.score === n ? 'on' : ''} ${shown !== null && n <= shown ? 'fill' : ''}`}
             aria-pressed={m.score === n}
-            aria-label={`Rate ${n} of 10: ${LABELS[n - 1]}`}
+            aria-label={`Puntuar ${n} de 10: ${LABELS[n - 1]}`}
             onMouseEnter={() => setHover(n)}
             onFocus={() => setHover(n)}
             onBlur={() => setHover(null)}
@@ -176,13 +177,13 @@ function Card({ movie: m, me, onSave }: { movie: Movie; me?: string; onSave: (m:
           </button>
         ))}
       </div>
-      {failed && <p className="error small">Could not save. Try again.</p>}
+      {failed && <p className="error small">No se pudo guardar. Inténtalo de nuevo.</p>}
       <p className="community">
-        {m.watchersCount === 0 ? 'Nobody yet' : `${m.watchersCount} watched`}
+        {m.watchersCount === 0 ? 'Nadie aún' : `Vista por ${m.watchersCount}`}
         {m.averageScore !== null && <b>★ {m.averageScore.toFixed(1)}</b>}
       </p>
       {m.ratings.length > 0 && (
-        <ul className="ratings" aria-label="Friends' ratings">
+        <ul className="ratings" aria-label="Puntajes de tus amigos">
           {m.ratings.map((r) => (
             <li key={r.tag} className={`${r.tag === me ? 'me ' : ''}${tier(r.score)}`}>
               {r.tag} <b>{r.score ?? '✓'}</b>

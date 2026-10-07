@@ -18,9 +18,9 @@ export default function Login() {
     } catch (err) {
       const status = err instanceof ApiError ? err.status : 0
       setError(
-        status === 401 ? 'Wrong group password.'
-        : status === 422 ? 'Tag must be 2-20 characters: letters, digits, _ or -.'
-        : 'Could not reach the server. Try again.',
+        status === 401 ? 'Contraseña del grupo incorrecta.'
+        : status === 422 ? 'La etiqueta debe tener de 2 a 20 caracteres: letras, números, _ o -.'
+        : 'No se pudo conectar con el servidor. Inténtalo de nuevo.',
       )
     } finally {
       setBusy(false)
@@ -31,17 +31,17 @@ export default function Login() {
     <div className="login">
       <form onSubmit={submit} className="login-card">
         <h1>Movie<span>Nights</span></h1>
-        <p className="muted">Pick your tag, enter the group password, and start ticking off movies. A new tag creates your list.</p>
+        <p className="muted">Elige tu etiqueta, escribe la contraseña del grupo y empieza a marcar lo que has visto. Una etiqueta nueva crea tu lista.</p>
         <label>
-          Your tag
+          Tu etiqueta
           <input value={tag} onChange={(e) => setTag(e.target.value)} autoComplete="username" autoFocus required />
         </label>
         <label>
-          Group password
+          Contraseña del grupo
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
         </label>
         {error && <p className="error" role="alert">{error}</p>}
-        <button className="primary" disabled={busy}>{busy ? 'Signing in…' : 'Enter'}</button>
+        <button className="primary" disabled={busy}>{busy ? 'Entrando…' : 'Entrar'}</button>
       </form>
     </div>
   )

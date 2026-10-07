@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { api, type UserList } from '../api'
 import Poster from '../components/Poster'
+import { ProfileSkeleton } from '../components/Skeleton'
 
 export default function Profile() {
   const { tag = '' } = useParams()
@@ -22,7 +23,7 @@ export default function Profile() {
   )
 
   if (error) return <p className="error">{error}</p>
-  if (!data) return <p className="muted">Loading…</p>
+  if (!data) return <ProfileSkeleton />
 
   const { stats } = data
   const pct = stats.totalMovies ? Math.round((stats.watchedCount / stats.totalMovies) * 100) : 0
@@ -31,13 +32,13 @@ export default function Profile() {
 
   return (
     <>
-      <h1 className="title">{data.user.tag}<span className="muted-title">&rsquo;s movie list</span></h1>
+      <h1 className="title">{data.user.tag}<span className="muted-title"> · lista de películas</span></h1>
       <section className="stats">
-        <div className="stat"><b>{stats.watchedCount}<small>/{stats.totalMovies}</small></b><span>watched &middot; {pct}%</span></div>
-        <div className="stat"><b>{stats.averageScore !== null ? stats.averageScore.toFixed(1) : '–'}</b><span>average score</span></div>
-        <div className="dist" aria-label="Score distribution">
+        <div className="stat"><b>{stats.watchedCount}<small>/{stats.totalMovies}</small></b><span>vistas &middot; {pct}%</span></div>
+        <div className="stat"><b>{stats.averageScore !== null ? stats.averageScore.toFixed(1) : '–'}</b><span>puntaje promedio</span></div>
+        <div className="dist" aria-label="Distribución de puntajes">
           {dist.map((n, i) => (
-            <div key={i} className="dist-col" title={`${n} movie${n === 1 ? '' : 's'} scored ${i + 1}`}>
+            <div key={i} className="dist-col" title={`${n} ${n === 1 ? 'título' : 'títulos'} con puntaje ${i + 1}`}>
               <i style={{ height: `${(n / maxDist) * 100}%` }} />
               <span>{i + 1}</span>
             </div>
@@ -46,7 +47,7 @@ export default function Profile() {
       </section>
 
       {entries.length === 0 ? (
-        <p className="muted">Nothing watched yet.</p>
+        <p className="muted">Todavía no ha visto nada.</p>
       ) : (
         <ul className="list">
           {entries.map((e) => (
@@ -56,7 +57,7 @@ export default function Profile() {
                 <strong>{e.movie.title}</strong>
                 <span className="muted">{e.movie.year}</span>
               </div>
-              <span className={`score-pill ${e.score === null ? 'none' : ''}`}>{e.score ?? 'No score'}</span>
+              <span className={`score-pill ${e.score === null ? 'none' : ''}`}>{e.score ?? 'Sin puntaje'}</span>
             </li>
           ))}
         </ul>

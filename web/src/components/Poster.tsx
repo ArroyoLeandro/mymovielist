@@ -9,7 +9,7 @@ export default function Poster({ url, title, className = '' }: { url: string | n
     <img
       className={`poster ${className}`}
       src={url}
-      alt={`${title} poster`}
+      alt={`Póster de ${title}`}
       loading="lazy"
       referrerPolicy="no-referrer"
       onError={() => setFailed(true)}
