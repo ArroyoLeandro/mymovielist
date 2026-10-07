@@ -45,6 +45,7 @@ User request (2026-10-07): all Disney studios under `/disney`; every movie (exis
 - [x] T11 (local) — Independent studios, animation and live action never mixed in a section (TMDB genre 16): disney (Disney Animación), disney-live-action, disney-xd (Jetix/Disney XD), lucasfilm, dreamworks, blue-sky, ghibli, marvel (MCU phases), sony, universal, warner (franchises via TMDB collections), cartoon-network, nickelodeon. Importer gained `collection` sources, multi-`sources` per section, `--move` (take over rows from another studio keeping ids/watch entries) and automatic removal of empty sections. Commits 53adffb, 5b3aaeb. Imported into the LOCAL docker DB only; prod untouched. Moves verified: test watch entries on rows moved between studios kept their ids; no duplicates or empty sections. Jetix has no TMDB network: uses Disney XD 44 + Toon Disney 142 + Jetix companies.
 - [x] T12 — Section nav redesign (hidden scrollbar, edge fades, arrows, wheel-to-horizontal, scrollspy). Commit 0908bf3.
 - [x] T13 — Ranking per studio (% completed), global movies/series split + studios led, group highlights endpoint and cards. Commit 4ec192f.
+- [x] T14 — My list (/u/:tag) by studio: API entries carry studio/section/mediaType, stats.byStudio; UI studio chips + type filter + sort, collapsible studio groups, tags, per-studio bars. Commit 2814579.
 
 ## Acceptance criteria
 - Without login, no catalog data is reachable (API 401; SPA shows login).
@@ -72,6 +73,8 @@ User request (2026-10-07): all Disney studios under `/disney`; every movie (exis
 - T7 done (route: delegated; 2480b9d session lifetime + private save path + sliding cookie, c356294 stale-poll guard). php -l OK (php:7.4-cli); npm run build passes.
 
 - T8/T9 (+ added scope: studios home with logos, static/dynamic API split with ETag/304, react-query) done, route: delegated writer. Verification: php -l OK on php:7.4-cli for all changed PHP; `npm run build` passes; live `import-tmdb --studio=disney --dry-run` OK (425 titles: 91 existing updated in place, 334 new; 0 orphans; re-run is idempotent = 425 unchanged); `--match-existing` 91/91; migration 002 applied on a prod-like DB (old schema, 91 movies, 4 watch entries): entries and ids survive, re-run fails harmlessly; fresh volume schema+seed OK; curl: 200 + ETag then 304 on /api/studios and /movies, 401 without session, /ratings and /me/progress no-store. No browser E2E of the new SPA was run. No TMDB ids left as TODO; review the live-action (companies 2|3166, vote_count>=50) and Disney Channel (240533|241787 + genre 10770) lists. Manual override: movie:1084244 (Toy Story 5; TMDB's only LATAM alt title was Quechua). Web work shipped in commits 9ac7393, cc1b388; docs 8e8d078 (the separate `perf:` commit was folded into c7e11cf and cc1b388).
+
+- T14 done: php -l OK on Repository.php and index.php (php:7.4-cli); `npm run build` passes; local API list returns studio/section/mediaType per entry and stats.byStudio. No browser E2E run.
 
 ## Next step
 User tests in the browser locally. Then deploy to Hostinger subdomain via MCP (pending explicit user request + subdomain). RDD review deferred: user asked for speed and validation at the end.
