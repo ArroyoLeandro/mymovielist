@@ -4,11 +4,13 @@ import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/
 import { api, type Movie, type RatingRow } from '../api'
 import { useAuth } from '../auth'
 import Poster from '../components/Poster'
+import SagaRow from '../components/SagaRow'
 import SectionNav from '../components/SectionNav'
 import { CatalogSkeleton } from '../components/Skeleton'
 import { useCatalog } from '../queries'
 
 type Filter = 'all' | 'watched' | 'unwatched'
+type Tab = 'sagas' | 'movies' | 'series'
 type SaveFn = (movieId: number, watched: boolean, score: number | null) => Promise<boolean>
 
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
@@ -98,18 +100,28 @@ function CatalogView({ slug }: { slug: string }) {
 
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
+  const [tabPick, setTabPick] = useState<Tab | null>(null)
   // Sections always start expanded; collapsing is per visit and resets when the studio changes.
   const [collapsedState, setCollapsedState] = useState<{ slug: string; list: string[] }>({ slug, list: [] })
 
   const byId = useMemo(() => new Map((ratings.data ?? []).map((r) => [r.movieId, r])), [ratings.data])
   const sections = catalog.data?.sections
+  const sagas = catalog.data?.sagas
   const all = useMemo(() => sections?.flatMap((s) => s.movies) ?? [], [sections])
   const haystack = useMemo(() => new Map(all.map((m) => [m.id, norm(`${m.title} ${m.originalTitle ?? ''}`)])), [all])
+  const titleById = useMemo(() => new Map(all.map((m) => [m.id, m])), [all])
+  const inSaga = useMemo(() => new Set(sagas?.flatMap((s) => s.titleIds) ?? []), [sagas])
+  // Movies tab: movies outside any saga, keeping the studio's sections. Series tab: every series.
+  const movieSections = useMemo(
+    () => (sections ?? []).map((s) => ({ ...s, movies: s.movies.filter((m) => m.mediaType === 'movie' && !inSaga.has(m.id)) })).filter((s) => s.movies.length > 0),
+    [sections, inSaga],
+  )
+  const series = useMemo(() => all.filter((m) => m.mediaType === 'series'), [all])
 
   if ((catalog.error && !catalog.data) || (ratings.error && !ratings.data)) {
     return <p className="error">{(catalog.error ?? ratings.error)?.message}</p>
   }
-  if (!catalog.data || !sections || !ratings.data) return <CatalogSkeleton />
+  if (!catalog.data || !sections || !sagas || !ratings.data) return <CatalogSkeleton />
 
   const watchedCount = ratings.data.filter((r) => r.watched).length
   const pct = all.length ? Math.round((watchedCount / all.length) * 100) : 0
@@ -120,6 +132,10 @@ function CatalogView({ slug }: { slug: string }) {
     const watched = byId.get(m.id)?.watched ?? false
     return (filter === 'all' || (filter === 'watched') === watched) && (!q || haystack.get(m.id)!.includes(q))
   }
+
+  const moviesCount = movieSections.reduce((n, s) => n + s.movies.length, 0)
+  const tabs = ([['sagas', 'Sagas', sagas.length], ['movies', 'Películas', moviesCount], ['series', 'Series', series.length]] as [Tab, string, number][]).filter((t) => t[2] > 0)
+  const tab = tabs.find((t) => t[0] === tabPick)?.[0] ?? tabs[0]?.[0]
 
   const collapsed = new Set(collapsedState.slug === slug ? collapsedState.list : [])
   const setCollapsedList = (list: string[]) => setCollapsedState({ slug, list })
@@ -136,9 +152,17 @@ function CatalogView({ slug }: { slug: string }) {
     }
     requestAnimationFrame(() => document.getElementById(`sec-${sectionSlug}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
   }
-  const allCollapsed = sections.every((s) => collapsed.has(s.slug))
+  const allCollapsed = movieSections.every((s) => collapsed.has(s.slug))
 
-  const shown = sections.map((s) => ({ s, movies: s.movies.filter(visible) })).filter((x) => !searching || x.movies.length > 0)
+  const shown = movieSections.map((s) => ({ s, movies: s.movies.filter(visible) })).filter((x) => !searching || x.movies.length > 0)
+  const shownSagas = sagas
+    .map((sg) => {
+      const movies = sg.titleIds.map((id) => titleById.get(id)).filter((m): m is Movie => !!m)
+      return { sg, movies, visibleMovies: movies.filter(visible) }
+    })
+    .filter((x) => x.visibleMovies.length > 0)
+  const shownSeries = series.filter(visible)
+  const empty = tab === 'sagas' ? shownSagas.length === 0 : tab === 'movies' ? shown.length === 0 : shownSeries.length === 0
 
   return (
     <>
@@ -157,37 +181,61 @@ function CatalogView({ slug }: { slug: string }) {
         </div>
       </div>
 
-      {sections.length > 1 && (
-        <SectionNav
-          sections={sections.map((s) => ({ slug: s.slug, name: s.name, period: s.period, count: s.movies.length }))}
-          visibleSlugs={shown.map((x) => x.s.slug)}
-          allCollapsed={allCollapsed}
-          onJump={jump}
-          onToggleAll={() => setCollapsedList(allCollapsed ? [] : sections.map((s) => s.slug))}
-        />
+      <div className="seg tabs" role="tablist" aria-label="Contenido">
+        {tabs.map(([key, label, n]) => (
+          <button key={key} role="tab" aria-selected={tab === key} className={tab === key ? 'on' : ''} onClick={() => setTabPick(key)}>
+            {label} <small>{n}</small>
+          </button>
+        ))}
+      </div>
+
+      {tab === 'sagas' && shownSagas.map(({ sg, movies, visibleMovies }) => (
+        <SagaRow key={sg.slug} name={sg.name} count={movies.length} seen={movies.filter((m) => byId.get(m.id)?.watched).length}>
+          {visibleMovies.map((m) => <Card key={m.id} movie={m} r={byId.get(m.id)} me={me} onSave={onSave} />)}
+        </SagaRow>
+      ))}
+
+      {tab === 'movies' && (
+        <>
+          {movieSections.length > 1 && (
+            <SectionNav
+              sections={movieSections.map((s) => ({ slug: s.slug, name: s.name, period: s.period, count: s.movies.length }))}
+              visibleSlugs={shown.map((x) => x.s.slug)}
+              allCollapsed={allCollapsed}
+              onJump={jump}
+              onToggleAll={() => setCollapsedList(allCollapsed ? [] : movieSections.map((s) => s.slug))}
+            />
+          )}
+          {shown.map(({ s, movies }) => {
+            const open = searching || !collapsed.has(s.slug)
+            const seen = s.movies.filter((m) => byId.get(m.id)?.watched).length
+            return (
+              <section key={s.slug} id={`sec-${s.slug}`} className="era">
+                <h2>
+                  <button className="era-toggle" aria-expanded={open} onClick={() => toggle(s.slug)} disabled={searching}>
+                    <i className={`chev ${open ? 'open' : ''}`} aria-hidden="true" />
+                    {s.name} <span>{s.period}</span>
+                    <em>{seen}/{s.movies.length}</em>
+                  </button>
+                </h2>
+                {open && (
+                  <div className="grid era-body">
+                    {movies.map((m) => <Card key={m.id} movie={m} r={byId.get(m.id)} me={me} onSave={onSave} />)}
+                  </div>
+                )}
+              </section>
+            )
+          })}
+        </>
       )}
 
-      {shown.map(({ s, movies }) => {
-        const open = searching || !collapsed.has(s.slug)
-        const seen = s.movies.filter((m) => byId.get(m.id)?.watched).length
-        return (
-          <section key={s.slug} id={`sec-${s.slug}`} className="era">
-            <h2>
-              <button className="era-toggle" aria-expanded={open} onClick={() => toggle(s.slug)} disabled={searching}>
-                <i className={`chev ${open ? 'open' : ''}`} aria-hidden="true" />
-                {s.name} <span>{s.period}</span>
-                <em>{seen}/{s.movies.length}</em>
-              </button>
-            </h2>
-            {open && (
-              <div className="grid era-body">
-                {movies.map((m) => <Card key={m.id} movie={m} r={byId.get(m.id)} me={me} onSave={onSave} />)}
-              </div>
-            )}
-          </section>
-        )
-      })}
-      {shown.length === 0 && <p className="muted">No hay títulos que coincidan. Borra la búsqueda o cambia el filtro.</p>}
+      {tab === 'series' && (
+        <div className="grid era era-body">
+          {shownSeries.map((m) => <Card key={m.id} movie={m} r={byId.get(m.id)} me={me} onSave={onSave} />)}
+        </div>
+      )}
+
+      {empty && <p className="muted">{tab ? 'No hay títulos que coincidan. Borra la búsqueda o cambia el filtro.' : 'Este estudio aún no tiene títulos.'}</p>}
     </>
   )
 }

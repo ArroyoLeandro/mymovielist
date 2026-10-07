@@ -9,6 +9,7 @@ export interface Movie {
   posterUrl: string | null
   mediaType: 'movie' | 'series'
   tmdbId: number | null
+  collection: { slug: string; name: string } | null
 }
 /** Dynamic per-title data; only titles with at least one entry have a row. */
 export interface RatingRow {
@@ -20,7 +21,9 @@ export interface RatingRow {
   averageScore: number | null
 }
 export interface Section { slug: string; name: string; period: string; movies: Movie[] }
-export interface Catalog { studio: { slug: string; name: string; logoUrl: string | null }; sections: Section[] }
+/** Collection with 2+ titles in the studio; titleIds are in release order. */
+export interface Saga { slug: string; name: string; posterUrl: string | null; titleIds: number[] }
+export interface Catalog { studio: { slug: string; name: string; logoUrl: string | null }; sections: Section[]; sagas: Saga[] }
 export interface Studio { slug: string; name: string; logoUrl: string | null; movieCount: number }
 export interface Progress { slug: string; watchedCount: number }
 export interface Entry { movieId: number; watched: boolean; score: number | null; watchedAt: string | null }

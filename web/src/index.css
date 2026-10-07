@@ -405,3 +405,23 @@ input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px #d
 .tag.studio { color: var(--gold); border-color: #d4f52655; }
 .tag.series { color: var(--rose); border-color: #ff7aa855; }
 @media (max-width: 640px) { .profile-filters { margin-inline: -14px; padding: 6px 14px; } }
+
+/* ---------- studio tabs + saga rows ---------- */
+.tabs { margin: 14px 0 0; width: max-content; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.tabs button small { color: var(--gold); margin-left: 5px; }
+.saga { margin-top: 32px; }
+.saga h2 { font-size: 1.2rem; font-weight: 700; margin-bottom: 12px; }
+.saga h2 span { color: var(--gold); font-weight: 500; font-size: 0.9rem; margin-left: 8px; }
+.saga-wrap { position: relative; }
+.saga-scroll {
+  display: flex; gap: 16px; overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: none; -ms-overflow-style: none;
+  overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; padding: 4px 2px 10px;
+}
+.saga-scroll::-webkit-scrollbar { display: none; }
+.saga-scroll > .card { flex: 0 0 168px; scroll-snap-align: start; }
+@media (max-width: 640px) { .saga-scroll > .card { flex-basis: 150px; } }
+.saga-wrap .chips-arrow { margin-top: -26px; width: 34px; height: 34px; }
+@media (hover: hover) and (pointer: fine) {
+  .saga-wrap .chips-arrow { display: block; }
+  .saga-wrap[data-left="true"] .chips-arrow.left, .saga-wrap[data-right="true"] .chips-arrow.right { opacity: 1; pointer-events: auto; }
+}
