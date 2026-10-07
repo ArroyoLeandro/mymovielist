@@ -7,3 +7,4 @@ api/config/config.php
 *.log
 build/
 api/storage/
+backups/
