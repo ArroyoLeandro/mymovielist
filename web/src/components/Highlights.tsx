@@ -2,97 +2,145 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Flame, Gavel, HeartHandshake, ThumbsUp, Trophy, type LucideIcon } from 'lucide-react'
 import { useHighlights } from '../queries'
+import Avatar from './Avatar'
 import Poster from './Poster'
 import { Sk } from './Skeleton'
 
-const who = (tag: string) => <Link to={`/u/${tag}`} className="who">{tag}</Link>
+const Who = ({ tag }: { tag: string }) => <Link to={`/u/${tag}`} className="hl-who">{tag}</Link>
 
-function Card({ icon: Icon, label, children }: { icon: LucideIcon; label: string; children: ReactNode }) {
+interface CardProps {
+  tone: 'gold' | 'rose' | 'mint' | 'amber' | 'violet'
+  icon: LucideIcon
+  label: string
+  visual: ReactNode
+  title: ReactNode
+  caption: ReactNode
+  value: string
+  unit: string
+  extra?: ReactNode
+}
+
+/** Every highlight has the same anatomy: visual, label, title, caption and one big number. */
+function Card({ tone, icon: Icon, label, visual, title, caption, value, unit, extra }: CardProps) {
   return (
-    <article className="hl-card">
-      <p className="hl-label"><Icon size={15} aria-hidden="true" /> {label}</p>
-      {children}
+    <article className={`hl hl-${tone}`}>
+      <div className="hl-in">
+        <div className="hl-visual">{visual}</div>
+        <div className="hl-body">
+          <p className="hl-label"><Icon size={14} aria-hidden="true" /> {label}</p>
+          <p className="hl-title">{title}</p>
+          <p className="hl-caption">{caption}</p>
+          {extra}
+        </div>
+        <p className="hl-value"><b>{value}</b><span>{unit}</span></p>
+      </div>
     </article>
   )
 }
 
+const score = (n: number) => n.toFixed(1)
+
 export function HighlightsSkeleton() {
   return (
-    <section className="highlights" aria-hidden="true">
-      <Sk className="sk-h2" style={{ width: 220 }} />
-      <div className="hl-grid">
-        {Array.from({ length: 4 }, (_, i) => <Sk key={i} className="sk-hl" />)}
-      </div>
-    </section>
+    <div className="hl-grid" data-count="5" aria-hidden="true">
+      {Array.from({ length: 5 }, (_, i) => (
+        <div key={i} className="hl hl-sk">
+          <div className="hl-in">
+            <Sk className="hl-visual sk-hl-visual" />
+            <div className="hl-body">
+              <Sk className="sk-line sm" style={{ width: '45%' }} />
+              <Sk className="sk-line" style={{ width: '75%', margin: '8px 0' }} />
+              <Sk className="sk-line sm" style={{ width: '60%' }} />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
   )
 }
 
-export default function Highlights() {
-  const { data: h } = useHighlights()
-  if (!h) return <HighlightsSkeleton />
-  const cards: ReactNode[] = []
+function Cards() {
+  const { data: h, error } = useHighlights()
+  if (!h) return error ? <p className="muted">No se pudieron cargar los destacados. Se reintenta solo en unos segundos.</p> : <HighlightsSkeleton />
 
-  if (h.mostGenerous) {
-    cards.push(
-      <Card key="gen" icon={ThumbsUp} label="Más generoso">
-        <p className="hl-main">{who(h.mostGenerous.tag)}</p>
-        <p className="hl-sub">Promedio ★ {h.mostGenerous.average.toFixed(1)} en {h.mostGenerous.count} títulos</p>
-      </Card>,
-    )
-  }
-  if (h.mostDemanding) {
-    cards.push(
-      <Card key="dem" icon={Gavel} label="Más exigente">
-        <p className="hl-main">{who(h.mostDemanding.tag)}</p>
-        <p className="hl-sub">Promedio ★ {h.mostDemanding.average.toFixed(1)} en {h.mostDemanding.count} títulos</p>
-      </Card>,
-    )
-  }
+  const cards: ReactNode[] = []
   if (h.favorite) {
+    const m = h.favorite.movie
     cards.push(
-      <Card key="fav" icon={Trophy} label="La favorita del grupo">
-        <div className="hl-movie">
-          <Poster url={h.favorite.movie.posterUrl} title={h.favorite.movie.title} className="hl-thumb" />
-          <div>
-            <p className="hl-main">{h.favorite.movie.title}</p>
-            <p className="hl-sub">★ {h.favorite.average.toFixed(1)} · {h.favorite.votes} puntajes</p>
-          </div>
-        </div>
-      </Card>,
+      <Card
+        key="fav" tone="gold" icon={Trophy} label="La favorita"
+        visual={<Poster url={m.posterUrl} title={m.title} className="hl-poster" />}
+        title={m.title}
+        caption={`${h.favorite.votes} ${h.favorite.votes === 1 ? 'puntaje' : 'puntajes'} del grupo`}
+        value={score(h.favorite.average)} unit="promedio"
+      />,
     )
   }
   if (h.controversial) {
+    const m = h.controversial.movie
+    const sorted = [...h.controversial.scores].sort((a, b) => a.score - b.score)
+    const low = sorted[0]
+    const high = sorted[sorted.length - 1]
     cards.push(
-      <Card key="con" icon={Flame} label="La más polémica">
-        <div className="hl-movie">
-          <Poster url={h.controversial.movie.posterUrl} title={h.controversial.movie.title} className="hl-thumb" />
-          <div>
-            <p className="hl-main">{h.controversial.movie.title}</p>
-            <p className="hl-spread">
-              {h.controversial.scores.map((s) => <span key={s.tag}>{s.tag} <b>{s.score}</b></span>)}
-            </p>
-          </div>
-        </div>
-      </Card>,
+      <Card
+        key="con" tone="rose" icon={Flame} label="La más polémica"
+        visual={<Poster url={m.posterUrl} title={m.title} className="hl-poster" />}
+        title={m.title}
+        caption={low && high ? <><Who tag={low.tag} /> le puso {low.score} y <Who tag={high.tag} />, {high.score}</> : 'Puntajes muy repartidos'}
+        value={low && high ? `${low.score}–${high.score}` : '—'} unit="puntajes"
+      />,
+    )
+  }
+  if (h.mostGenerous) {
+    const g = h.mostGenerous
+    cards.push(
+      <Card
+        key="gen" tone="mint" icon={ThumbsUp} label="Más generoso"
+        visual={<Avatar tag={g.tag} className="hl-av" />}
+        title={<Who tag={g.tag} />}
+        caption={`Sobre ${g.count} ${g.count === 1 ? 'título puntuado' : 'títulos puntuados'}`}
+        value={score(g.average)} unit="promedio"
+      />,
+    )
+  }
+  if (h.mostDemanding) {
+    const d = h.mostDemanding
+    cards.push(
+      <Card
+        key="dem" tone="amber" icon={Gavel} label="Más exigente"
+        visual={<Avatar tag={d.tag} className="hl-av" />}
+        title={<Who tag={d.tag} />}
+        caption={`Sobre ${d.count} ${d.count === 1 ? 'título puntuado' : 'títulos puntuados'}`}
+        value={score(d.average)} unit="promedio"
+      />,
     )
   }
   if (h.soulmates) {
+    const s = h.soulmates
     cards.push(
-      <Card key="soul" icon={HeartHandshake} label="Almas gemelas">
-        <p className="hl-main">{who(h.soulmates.a)} + {who(h.soulmates.b)}</p>
-        <p className="hl-sub"><b className="hl-pct">{h.soulmates.match}%</b> de coincidencia en {h.soulmates.common} títulos</p>
-      </Card>,
+      <Card
+        key="soul" tone="violet" icon={HeartHandshake} label="Almas gemelas"
+        visual={<span className="hl-pair"><Avatar tag={s.a} className="hl-av" /><Avatar tag={s.b} className="hl-av" /></span>}
+        title={<><Who tag={s.a} /> y <Who tag={s.b} /></>}
+        caption={`Puntajes parecidos en ${s.common} ${s.common === 1 ? 'título' : 'títulos'}`}
+        value={`${s.match}%`} unit="coinciden"
+        extra={<span className="hl-meter" aria-hidden="true"><i style={{ width: `${Math.min(100, Math.max(0, s.match))}%` }} /></span>}
+      />,
     )
   }
 
+  if (cards.length === 0) {
+    return <p className="muted">Todavía no hay suficientes puntajes. Cuando el grupo puntúe más títulos, aquí aparecen la favorita, la más polémica y las almas gemelas.</p>
+  }
+  return <div className="hl-grid" data-count={cards.length}>{cards}</div>
+}
+
+/** "Destacados del grupo": the same five cards in a wrapping grid (no carousel, no orphan card). */
+export default function Highlights() {
   return (
-    <section className="highlights" aria-labelledby="hl-title">
-      <div className="section-head"><h2 id="hl-title">Destacados del grupo</h2></div>
-      {cards.length > 0 ? (
-        <div className="hl-grid">{cards}</div>
-      ) : (
-        <p className="muted">Todavía no hay suficientes puntajes. Cuando el grupo puntúe más títulos, aquí van a aparecer los destacados.</p>
-      )}
+    <section className="hl-section" aria-labelledby="hl-title">
+      <h2 id="hl-title" className="rk-h2">Destacados del grupo</h2>
+      <Cards />
     </section>
   )
 }

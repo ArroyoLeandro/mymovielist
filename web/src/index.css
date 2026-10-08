@@ -78,6 +78,9 @@
 /* ---------- 2. Base ---------- */
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
+/* Safety net against sideways page scroll on phones (which also widens fixed overlays and sheets).
+   clip, not hidden: it creates no scroll container, so position: sticky keeps working. */
+html, body { overflow-x: clip; }
 body {
   margin: 0;
   min-height: 100vh;
@@ -517,80 +520,8 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
   .logo-tile.wordmark:not(.mini) span { font-size: 1.1rem; }
 }
 
-/* ---------- 12. Ranking ---------- */
-.highlights { margin-bottom: var(--s6); }
-.hl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--s3); }
-.hl-card { display: grid; align-content: start; gap: var(--s1); min-width: 0; padding: 14px var(--s4); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
-.hl-label { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--gold); font-size: var(--fs-meta); font-weight: 600; }
-.hl-main { margin: 0; font-family: var(--display); font-size: 1.1rem; font-weight: 700; overflow-wrap: anywhere; }
-.hl-sub { margin: 0; color: var(--muted); font-size: var(--fs-meta); }
-.hl-sub b { color: var(--gold); }
-.hl-movie { display: grid; grid-template-columns: 52px minmax(0, 1fr); align-items: center; gap: var(--s3); }
-.hl-thumb { width: 52px; border-radius: var(--r-sm); font-size: 1.2rem; }
-.hl-spread { display: flex; flex-wrap: wrap; gap: var(--s1) 10px; margin: var(--s1) 0 0; color: var(--muted); font-size: 0.78rem; }
-.hl-spread b { color: var(--text); }
-
-.rk-controls { display: grid; gap: var(--s3); justify-items: start; margin-top: var(--s4); }
-
-.podium {
-  --gold-m: #ffc94d; /* podium medals stay real gold/silver/bronze */
-  --silver-m: #d5d9f2; --bronze-m: #e49a6a;
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 10px;
-  max-width: 640px; margin: 28px auto 24px; padding: 0; list-style: none;
-}
-.pod { --medal: var(--gold-m); display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; text-align: center; }
-.pod-2 { --medal: var(--silver-m); }
-.pod-3 { --medal: var(--bronze-m); }
-.pod-who { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--display); font-size: 1.05rem; font-weight: 700; text-decoration: none; }
-.pod-who:hover { text-decoration: underline; }
-.pod-1 .pod-who { font-size: 1.3rem; color: var(--gold-m); }
-.pod-count { color: var(--muted); font-size: 0.85rem; }
-.pod-count b { color: var(--text); font-size: 1.1rem; }
-.pod-extra { color: var(--muted); font-size: var(--fs-xs); line-height: 1.3; }
-.pod-avg { margin-bottom: var(--s2); color: var(--gold); font-size: 0.8rem; }
-.pod-step {
-  display: grid; place-items: start center; width: 100%; padding-top: 10px;
-  border: 1px solid color-mix(in srgb, var(--medal) 55%, var(--line)); border-bottom: 0; border-radius: var(--r-md) var(--r-md) 0 0;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--medal) 28%, var(--panel)), var(--panel) 85%);
-  box-shadow: 0 -6px 30px color-mix(in srgb, var(--medal) 14%, transparent);
-}
-.pod-1 .pod-step { height: 150px; }
-.pod-2 .pod-step { height: 112px; }
-.pod-3 .pod-step { height: 84px; }
-.pod-place { font-family: var(--display); font-size: 2.2rem; font-weight: 800; line-height: 1; color: var(--medal); }
-.pod-1 .pod-place { font-size: 2.8rem; }
-.pod-empty { visibility: hidden; }
-
-.ranking { display: grid; gap: 10px; margin: var(--s2) 0 0; padding: 0; list-style: none; }
-.ranking li {
-  display: grid; grid-template-columns: 36px minmax(80px, 1.2fr) minmax(60px, 2fr) auto auto; align-items: center; gap: 14px;
-  padding: 14px 18px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
-}
-.pos { font-family: var(--display); font-size: 1.4rem; font-weight: 800; color: var(--muted); }
-.who { font-weight: 600; text-decoration: none; overflow-wrap: anywhere; }
-.who:hover { text-decoration: underline; }
-.who-box { display: grid; min-width: 0; }
-.who-box small { color: var(--muted); font-size: 0.75rem; }
-.bar-track { height: 8px; overflow: hidden; background: var(--panel-2); border-radius: var(--r-pill); }
-.bar-track i { display: block; height: 100%; background: var(--line-strong); border-radius: inherit; }
-.count { text-align: right; font-weight: 700; }
-.count small { color: var(--muted); font-weight: 400; }
-.avg { min-width: 56px; text-align: right; color: var(--gold); }
-@media (max-width: 719.98px) {
-  .podium { gap: 6px; margin-top: 20px; }
-  .pod-who { font-size: 0.9rem; }
-  .pod-1 .pod-who { font-size: 1rem; }
-  .pod-count { font-size: 0.75rem; }
-  .pod-count b { font-size: 0.95rem; }
-  .pod-avg { font-size: var(--fs-xs); }
-  .pod-1 .pod-step { height: 112px; }
-  .pod-2 .pod-step { height: 84px; }
-  .pod-3 .pod-step { height: 62px; }
-  .pod-place { font-size: 1.7rem; }
-  .pod-1 .pod-place { font-size: 2.1rem; }
-  .ranking li { grid-template-columns: 28px minmax(0, 1fr) auto auto; gap: 10px; padding: var(--s3); }
-  .ranking .bar-track { display: none; }
-}
+/* ---------- 12. Ranking ----------
+   Lives in ranking.css (imported by pages/Ranking.tsx). */
 
 /* ---------- 13. Profile ---------- */
 .stats { display: grid; grid-template-columns: auto auto 1fr; gap: var(--s4); margin: var(--s5) 0 var(--s5); }
@@ -700,10 +631,10 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
 .sk-row { height: 70px; border-radius: var(--radius); }
 .sk-stat { height: 104px; min-width: 150px; border-radius: var(--radius); }
 .sk-stat.dist-sk { min-width: 0; }
+@media (max-width: 719.98px) { .sk-stat { min-width: 0; } } /* two 150px boxes overflowed 320px phones */
 .sk-brand { height: 28px; width: 140px; }
 .sk-pill { height: 34px; width: 84px; border-radius: var(--r-pill); }
 .sk-logo { height: 96px; border-radius: var(--r-md); }
-.sk-hl { height: 92px; border-radius: var(--radius); }
 @media (max-width: 599.98px) {
   .sk-logo { height: 72px; }
   .sk-seg { width: 100%; }

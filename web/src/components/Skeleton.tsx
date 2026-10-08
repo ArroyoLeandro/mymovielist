@@ -70,20 +70,31 @@ export function CatalogSkeleton() {
   )
 }
 
+/** Ranking: same podium (avatars, lifted steps) and leaderboard rows, without medal colors. */
 export function RankingSkeleton() {
   return (
     <Busy label="Cargando ranking">
-      <div className="podium" aria-hidden="true">
-        {[2, 1, 3].map((p) => (
+      <div className="podium is-sk" style={{ '--lines': 2 } as CSSProperties} aria-hidden="true">
+        {[1, 2, 3].map((p) => (
           <div key={p} className={`pod pod-${p}`}>
-            <Sk className="sk-line" style={{ width: '70%' }} />
-            <Sk className="sk-line sm" style={{ width: '50%', margin: '6px 0 8px' }} />
-            <Sk className="pod-step" />
+            <div className="pod-figure"><Sk className="sk-av pod-av" /></div>
+            <div className="pod-step">
+              <Sk className="sk-line" style={{ width: '60%', margin: '2px auto 10px' }} />
+              <Sk className="sk-line" style={{ width: '40%', height: 22, margin: '0 auto 10px' }} />
+              <Sk className="sk-line sm" style={{ width: '70%', margin: '0 auto' }} />
+              <span className="pod-place">&nbsp;</span>
+            </div>
           </div>
         ))}
       </div>
-      <div className="ranking" aria-hidden="true">
-        {Array.from({ length: 4 }, (_, i) => <Sk key={i} className="sk-row" />)}
+      <div className="lb" aria-hidden="true">
+        {Array.from({ length: 4 }, (_, i) => (
+          <div key={i} className="lb-row">
+            <Sk className="sk-line lb-pos" style={{ width: 16 }} />
+            <Sk className="sk-av lb-av" />
+            <Sk className="sk-line lb-who" style={{ width: '50%' }} />
+          </div>
+        ))}
       </div>
     </Busy>
   )

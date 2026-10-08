@@ -1,0 +1,294 @@
+/* =============================================================================
+   Ranking page (imported by pages/Ranking.tsx; bundled before index.css, so
+   selectors that compete with index.css rules use two classes)
+   1 Avatar · 2 Header + scope picker · 3 Layout · 4 Podium · 5 Leaderboard
+   6 Highlights · 7 Skeletons · 8 Motion
+   ============================================================================= */
+
+.rk-sr {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+}
+.me-tag {
+  flex: none; display: inline-block; padding: 0 7px; border-radius: var(--r-pill);
+  background: var(--gold); color: var(--gold-ink);
+  font-family: var(--body); font-size: 0.68rem; font-weight: 800; line-height: 1.6;
+}
+
+/* ---------- 1. Avatar: initials on a per-user gradient (hue from the tag) ---------- */
+.av {
+  flex: none; display: inline-grid; place-items: center;
+  width: var(--av, 36px); height: var(--av, 36px); border-radius: 50%;
+  background: linear-gradient(140deg, oklch(0.72 0.15 var(--av-h)), oklch(0.46 0.17 calc(var(--av-h) + 55)));
+  box-shadow: inset 0 0 0 1px #ffffff2e;
+  color: #fff; font-family: var(--display); font-size: calc(var(--av, 36px) * 0.42); font-weight: 800;
+  line-height: 1; letter-spacing: -0.02em; text-shadow: 0 1px 2px #0007; user-select: none;
+}
+
+/* ---------- 2. Header + scope picker ---------- */
+.rk-head {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: var(--s3) var(--s4); margin-bottom: var(--s5);
+}
+.rk-head .title { min-width: 0; }
+.rk-controls { display: flex; align-items: center; gap: var(--s2); min-width: 0; max-width: 100%; }
+
+.picker { position: relative; flex: 0 1 auto; width: 240px; min-width: 0; }
+.picker-btn {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 0 12px 0 6px;
+  background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--r-pill);
+  font-size: 0.9rem; font-weight: 600; transition: border-color var(--fast);
+}
+.picker-btn:hover, .picker-btn[aria-expanded='true'] { border-color: var(--gold); }
+.picker-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picker-chev { flex: none; color: var(--muted); transition: rotate var(--fast); }
+.picker-btn[aria-expanded='true'] .picker-chev { rotate: 180deg; }
+.picker-mark { flex: none; display: grid; place-items: center; width: 44px; height: 26px; border-radius: 6px; background: var(--raised); color: var(--gold); }
+.picker-mark .logo-tile.mini { height: 26px; }
+
+.picker-pop {
+  position: absolute; left: 0; top: calc(100% + 6px); z-index: 25;
+  width: min(320px, calc(100vw - 2 * var(--gutter))); padding: 6px;
+  background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: var(--shadow-pop);
+  animation: pop 0.14s var(--ease);
+}
+.picker-search { position: relative; margin-bottom: 4px; }
+.picker-search svg { position: absolute; left: 11px; top: 50%; translate: 0 -50%; color: var(--muted); pointer-events: none; }
+.picker-search input { width: 100%; min-height: 36px; padding: 0 12px 0 34px; border-radius: var(--r-md); font-size: 0.88rem; }
+.picker-list { max-height: min(340px, 50vh); overflow-y: auto; overscroll-behavior: contain; margin: 0; padding: 0; list-style: none; }
+.picker-list li { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: var(--r-sm); font-size: 0.9rem; cursor: pointer; }
+.picker-list li[data-active='true'] { background: var(--panel-2); }
+.picker-list li[aria-selected='true'] { color: var(--gold); font-weight: 600; }
+.picker-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picker-check { flex: none; }
+.picker-none { margin: 0; padding: 10px 8px; color: var(--muted); font-size: 0.85rem; overflow-wrap: anywhere; }
+@media (max-width: 599.98px) {
+  .rk-controls { flex-wrap: wrap; width: 100%; }
+  .picker { flex: 1 1 100%; width: auto; }
+}
+
+/* ---------- 3. Layout: ranking + highlights side by side on wide screens ---------- */
+.rk-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s6); }
+@media (min-width: 1100px) {
+  .rk-layout { grid-template-columns: minmax(0, 1fr) 340px; align-items: start; gap: 48px; }
+}
+.rk-main { position: relative; isolation: isolate; min-width: 0; }
+/* Stage light over the podium (inside the column: never widens the page). */
+.rk-main::before {
+  content: ''; position: absolute; z-index: -1; left: 50%; top: -40px; width: min(600px, 100%); height: 480px; translate: -50% 0; pointer-events: none;
+  background: radial-gradient(closest-side, #ffc94d1c, transparent);
+}
+.rk-stage-title { margin: 0; text-align: center; font-size: var(--fs-section); font-weight: 700; overflow-wrap: anywhere; }
+.rk-h2 { margin: 0 0 var(--s3); font-size: var(--fs-section); font-weight: 700; }
+
+/* ---------- 4. Podium ----------
+   One grounded block: three steps on a shared floor, #2 left, #1 center, #3 right.
+   Each person stands on their step (avatar overlaps its top edge). Every step reserves
+   the same stat lines (--lines), so the only height difference is the medal --lift. */
+.podium {
+  --gold-m: #ffc94d; --silver-m: #d5d9f2; --bronze-m: #e49a6a; /* real medals, not the brand lime */
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 0 8px;
+  max-width: 660px; margin: 0 auto; padding: 44px 0 0; list-style: none;
+}
+.podium::after {
+  content: ''; grid-column: 1 / -1; grid-row: 2; height: 18px;
+  border-top: 2px solid var(--line-strong);
+  background: radial-gradient(50% 100% at 50% 0%, #000c, transparent 75%);
+}
+.pod { --medal: var(--gold-m); --av: 72px; --lift: 0px; grid-row: 1; display: flex; flex-direction: column; align-items: center; min-width: 0; text-align: center; }
+.pod-1 { --av: 104px; --lift: 64px; grid-column: 2; }
+.pod-2 { --medal: var(--silver-m); --lift: 30px; grid-column: 1; }
+.pod-3 { --medal: var(--bronze-m); grid-column: 3; }
+
+.pod-figure { position: relative; z-index: 1; margin-bottom: calc(var(--av) / -2); }
+.pod-av { box-shadow: inset 0 0 0 1px #ffffff2e, 0 0 0 3px var(--night), 0 0 0 5px var(--medal); }
+.pod-1 .pod-av { box-shadow: inset 0 0 0 1px #ffffff2e, 0 0 0 4px var(--night), 0 0 0 6px var(--medal), 0 0 48px 6px #ffc94d55; }
+.pod-crown {
+  position: absolute; left: 50%; top: -36px; width: 34px; height: 34px; translate: -50% 0;
+  color: var(--gold-m); fill: #ffc94d40; filter: drop-shadow(0 2px 10px #ffc94d80);
+}
+.pod-figure .me-tag { position: absolute; right: -8px; bottom: 0; box-shadow: 0 0 0 2px var(--night); }
+
+.pod-step {
+  position: relative; display: flex; flex-direction: column; align-items: center; width: 100%; min-width: 0; overflow: hidden;
+  padding: calc(var(--av) / 2 + 12px) 12px 0;
+  border: 1px solid color-mix(in srgb, var(--medal) 32%, var(--line)); border-top: 2px solid var(--medal); border-bottom: 0;
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  background:
+    linear-gradient(115deg, transparent 34%, #ffffff0f 47%, transparent 60%),
+    linear-gradient(180deg, color-mix(in srgb, var(--medal) 24%, var(--panel-2)), color-mix(in srgb, var(--medal) 6%, var(--panel)) 55%, var(--panel));
+}
+.pod-1 .pod-step { box-shadow: 0 -24px 70px -28px #ffc94d99; }
+
+.pod-name { max-width: 100%; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--display); font-size: 1.05rem; font-weight: 700; }
+.pod-name a { text-decoration: none; }
+.pod-name a:hover { text-decoration: underline; }
+.pod-1 .pod-name { font-size: 1.25rem; }
+.pod-count { margin: 4px 0 0; color: var(--muted); font-size: 0.85rem; line-height: 1.2; white-space: nowrap; }
+.pod-count b { display: block; color: var(--text); font-family: var(--display); font-size: 2.2rem; font-weight: 800; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.pod-1 .pod-count b { font-size: 2.8rem; color: var(--gold-m); }
+
+.pod-stats {
+  display: grid; align-content: start; gap: 1px; min-height: calc(var(--lines, 1) * 1.45em); margin: 10px 0 0; padding: 0;
+  list-style: none; color: var(--muted); font-size: 0.78rem; line-height: 1.45;
+}
+.pod-stats li { display: flex; align-items: center; justify-content: center; gap: 5px; min-width: 0; white-space: nowrap; }
+.pod-stats svg { flex: none; color: var(--medal); }
+.pod-stats b { color: var(--text); font-weight: 600; }
+
+/* Engraved medal numeral; the lift sits under it as margin so the metal gradient stays on the glyph. */
+.pod-place {
+  margin: auto 0 calc(var(--lift) + 8px); padding-top: 8px;
+  font-family: var(--display); font-size: 3.4rem; font-weight: 800; line-height: 0.9;
+  background: linear-gradient(180deg, #fff 0%, var(--medal) 42%, color-mix(in srgb, var(--medal) 45%, #000) 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.pod-1 .pod-place { font-size: 4.4rem; }
+
+.pod-free .pod-step { border-style: dashed; border-color: var(--line-strong); background: none; }
+.pod-free .pod-name, .pod-free .pod-count { color: var(--muted); }
+.pod-free .pod-count b { color: var(--line-strong); }
+.pod-free .pod-place { opacity: 0.35; }
+.av.av-free { background: var(--panel-2); color: var(--muted); text-shadow: none; box-shadow: inset 0 0 0 1px var(--line-strong), 0 0 0 3px var(--night); }
+
+/* Tablets: a bit smaller. Phones: compact but still side by side, stats as icon + number. */
+@media (max-width: 899.98px) {
+  .pod { --av: 64px; }
+  .pod-1 { --av: 88px; --lift: 52px; }
+  .pod-2 { --lift: 26px; }
+}
+@media (max-width: 599.98px) {
+  .podium { column-gap: 5px; padding-top: 34px; }
+  .pod { --av: 50px; }
+  .pod-1 { --av: 66px; --lift: 38px; }
+  .pod-2 { --lift: 18px; }
+  .pod-crown { top: -27px; width: 26px; height: 26px; }
+  .pod-figure .me-tag { right: -10px; font-size: 0.62rem; padding: 0 5px; }
+  .pod-step { padding: calc(var(--av) / 2 + 8px) 4px 0; border-radius: var(--r-md) var(--r-md) 0 0; }
+  .pod-name { font-size: 0.86rem; }
+  .pod-1 .pod-name { font-size: 0.95rem; }
+  .pod-count { font-size: 0.72rem; }
+  .pod-count b { font-size: 1.35rem; letter-spacing: -0.04em; }
+  .pod-1 .pod-count b { font-size: 1.65rem; }
+  .pod-stats { display: flex; flex-wrap: wrap; justify-content: center; align-content: flex-start; gap: 0 7px; min-height: calc(2 * 1.45em); margin-top: 6px; font-size: 0.72rem; }
+  .pod-stats .st-l { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+  .pod-stats svg { width: 11px; height: 11px; }
+  .pod-place { font-size: 2.2rem; margin-bottom: calc(var(--lift) + 6px); }
+  .pod-1 .pod-place { font-size: 2.8rem; }
+}
+
+/* ---------- 5. Leaderboard (4th and below) ---------- */
+.lb {
+  display: grid; margin: var(--s5) 0 0; padding: 4px; list-style: none;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg);
+}
+.lb-row {
+  display: grid; grid-template-columns: 2rem 36px minmax(0, 1fr) minmax(64px, 160px) 7rem 3.5rem;
+  align-items: center; gap: var(--s3); min-width: 0; padding: 10px 12px; border-radius: var(--r-md);
+}
+.lb-row + .lb-row { border-top: 1px solid var(--line); }
+.lb-row.is-me { background: color-mix(in srgb, var(--gold) 8%, var(--panel)); box-shadow: inset 3px 0 0 var(--gold); }
+.lb-row.is-me + .lb-row, .lb-row + .lb-row.is-me { border-top-color: transparent; }
+.lb-pos { color: var(--muted); font-family: var(--display); font-size: 1.05rem; font-weight: 800; text-align: center; font-variant-numeric: tabular-nums; }
+.lb-av { --av: 36px; }
+.lb-who { display: grid; min-width: 0; }
+.lb-name { display: flex; align-items: center; gap: 6px; min-width: 0; font-weight: 600; }
+.lb-name a { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-decoration: none; }
+.lb-name a:hover { text-decoration: underline; }
+.lb-sub { display: flex; flex-wrap: wrap; gap: 0 10px; color: var(--muted); font-size: 0.75rem; line-height: 1.4; }
+.lb-sub b { font-weight: 600; }
+.lb-bar { height: 6px; overflow: hidden; background: var(--panel-2); border-radius: var(--r-pill); }
+.lb-bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--line-strong), var(--muted)); }
+.lb-row.is-me .lb-bar i { background: var(--gold); }
+.lb-count { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.lb-count b { font-family: var(--display); font-size: 1.1rem; font-weight: 800; }
+.lb-count small { color: var(--muted); font-size: 0.75rem; }
+.lb-avg { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; color: var(--gold); font-size: 0.85rem; font-weight: 600; white-space: nowrap; }
+@media (max-width: 599.98px) {
+  .lb-row {
+    grid-template-columns: 1.4rem 32px minmax(0, 1fr) auto;
+    grid-template-areas: 'pos av who count' 'pos av bar avg';
+    gap: 6px 10px; padding: 10px 8px;
+  }
+  .lb-pos { grid-area: pos; font-size: 0.95rem; }
+  .lb-av { grid-area: av; --av: 32px; }
+  .lb-who { grid-area: who; }
+  .lb-bar { grid-area: bar; }
+  .lb-count { grid-area: count; }
+  .lb-avg { grid-area: avg; font-size: 0.78rem; }
+}
+
+/* ---------- 6. Highlights ----------
+   6-column grid so any count balances without orphans (5 = 2 + 3, 4 = 2 + 2, 3 = 3).
+   One column on phones and in the wide-screen side column. Card anatomy switches
+   on its own width (container query): visual | text | number, or stacked when narrow. */
+.hl-section { min-width: 0; }
+.hl-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--s3); }
+.hl { grid-column: span 2; min-width: 0; container-type: inline-size; }
+.hl-grid[data-count='1'] .hl { grid-column: 1 / -1; }
+.hl-grid[data-count='2'] .hl, .hl-grid[data-count='4'] .hl, .hl-grid[data-count='5'] .hl:nth-child(-n + 2) { grid-column: span 3; }
+@media (max-width: 599.98px), (min-width: 1100px) {
+  .hl-grid { grid-template-columns: minmax(0, 1fr); }
+  .hl-grid[data-count] .hl:nth-child(n) { grid-column: auto; }
+}
+
+.hl { --tone: var(--gold); }
+.hl-gold { --tone: #ffc94d; }
+.hl-rose { --tone: var(--rose); }
+.hl-mint { --tone: var(--mint); }
+.hl-amber { --tone: var(--amber); }
+.hl-violet { --tone: #b8a4ff; }
+.hl-in {
+  display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; grid-template-areas: 'vis body val';
+  align-items: center; gap: var(--s3); height: 100%; min-height: 104px; padding: 14px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--tone) 10%, var(--panel)), var(--panel) 62%);
+  border: 1px solid var(--line); border-radius: var(--radius);
+}
+@container (max-width: 279.98px) {
+  .hl-in { grid-template-columns: 56px minmax(0, 1fr); grid-template-areas: 'vis val' 'body body'; align-items: start; }
+}
+.hl-visual { grid-area: vis; display: grid; place-items: center; width: 56px; min-height: 56px; }
+.hl-poster { width: 48px; border-radius: var(--r-sm); font-size: 1.1rem; box-shadow: 0 6px 18px #0009; }
+.hl-av { --av: 48px; }
+.hl-pair { display: flex; }
+.hl-pair .hl-av { --av: 34px; }
+.hl-pair .hl-av + .hl-av { margin-left: -12px; box-shadow: inset 0 0 0 1px #ffffff2e, 0 0 0 2px var(--panel); }
+.hl-body { grid-area: body; min-width: 0; }
+.hl-label { display: flex; align-items: center; gap: 5px; margin: 0; color: var(--tone); font-size: 0.76rem; font-weight: 600; }
+.hl-label svg { flex: none; }
+.hl-title {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere;
+  margin: 2px 0 0; font-family: var(--display); font-size: 1.02rem; font-weight: 700; line-height: 1.2;
+}
+.hl-caption { margin: 3px 0 0; color: var(--muted); font-size: 0.78rem; line-height: 1.35; overflow-wrap: anywhere; }
+.hl-who { color: inherit; text-decoration: none; }
+.hl-who:hover { text-decoration: underline; }
+.hl-caption .hl-who { color: var(--text); font-weight: 600; }
+.hl-value { grid-area: val; display: grid; justify-items: end; margin: 0; text-align: right; line-height: 1; }
+.hl-value b { color: var(--tone); font-family: var(--display); font-size: 1.7rem; font-weight: 800; letter-spacing: -0.03em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.hl-value span { margin-top: 4px; color: var(--muted); font-size: 0.7rem; }
+.hl-meter { display: block; height: 4px; max-width: 140px; margin-top: 7px; overflow: hidden; background: var(--panel-2); border-radius: var(--r-pill); }
+.hl-meter i { display: block; height: 100%; border-radius: inherit; background: var(--tone); }
+
+/* ---------- 7. Skeletons (same boxes, neutral colors) ---------- */
+.sk.sk-av { width: var(--av, 36px); height: var(--av, 36px); border-radius: 50%; }
+.podium.is-sk .pod-av { box-shadow: 0 0 0 3px var(--night); }
+.podium.is-sk .pod-step { border-color: var(--line); background: var(--panel); }
+.sk.sk-hl-visual { width: 48px; height: 72px; border-radius: var(--r-sm); }
+.lb .sk.lb-pos { height: 14px; justify-self: center; }
+.lb .sk.lb-who { height: 14px; }
+
+/* ---------- 8. Motion: one entrance for the podium (steps rise 3, 2, 1, then people land) ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  .podium:not(.is-sk) .pod-step { animation: rk-rise 0.65s var(--ease) backwards; }
+  .podium:not(.is-sk) .pod-figure { animation: rk-land 0.45s var(--ease) backwards; }
+  .podium:not(.is-sk) .pod-crown { animation: rk-crown 0.5s var(--ease) 0.95s backwards; }
+  .pod-2 .pod-step { animation-delay: 0.1s; }
+  .pod-1 .pod-step { animation-delay: 0.2s; }
+  .pod-3 .pod-figure { animation-delay: 0.4s; }
+  .pod-2 .pod-figure { animation-delay: 0.5s; }
+  .pod-1 .pod-figure { animation-delay: 0.65s; }
+}
+@keyframes rk-rise { from { clip-path: inset(100% 0 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes rk-land { from { opacity: 0; transform: translateY(-14px) scale(0.85); } }
+@keyframes rk-crown { from { opacity: 0; transform: translateY(8px) rotate(-25deg); } }
