@@ -8,3 +8,4 @@ api/config/config.php*
 build/
 api/storage/
 backups/
+*.tsbuildinfo
