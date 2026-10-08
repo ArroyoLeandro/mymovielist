@@ -53,8 +53,13 @@ CREATE TABLE movies (
     providers_link VARCHAR(500) NULL,
     providers_updated_at DATETIME NULL,
     sort_order INT NOT NULL DEFAULT 0,
+    added_at DATETIME NULL,
+    source ENUM('rule','manual') NOT NULL DEFAULT 'rule',
+    added_by_user_id INT UNSIGNED NULL,
     PRIMARY KEY (id),
     KEY idx_movies_section (section_id, sort_order),
+    KEY idx_movies_added (added_at),
+    KEY idx_movies_added_by (added_by_user_id),
     UNIQUE KEY uq_movies_media_tmdb (media_type, tmdb_id),
     KEY idx_movies_collection (collection_id),
     CONSTRAINT fk_movies_section FOREIGN KEY (section_id) REFERENCES sections (id) ON DELETE CASCADE,
@@ -131,3 +136,6 @@ CREATE TABLE title_providers (
     CONSTRAINT fk_title_providers_title FOREIGN KEY (title_id) REFERENCES movies (id) ON DELETE CASCADE,
     CONSTRAINT fk_title_providers_provider FOREIGN KEY (provider_id) REFERENCES providers (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- movies.added_by_user_id references users, created after movies.
+ALTER TABLE movies ADD CONSTRAINT fk_movies_added_by FOREIGN KEY (added_by_user_id) REFERENCES users (id) ON DELETE SET NULL;

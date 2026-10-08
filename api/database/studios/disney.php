@@ -47,12 +47,19 @@ return [
             'source' => ['type' => 'ids', 'media' => 'movie', 'ids' => [49948, 10567, 11688, 10865, 11544, 9016, 10009, 13700, 9982, 1267, 13053]],
         ],
         [
-            // Includes Moana 2 (1241982) and Zootopia 2 (1084242), added to the original seed list.
+            // The current era grows by itself: explicit canon (includes Moana 2 1241982 and Zootopia 2 1084242) plus
+            // every WDAS (6125) animated feature >= 40 min released since 2009 (that discover returns exactly the canon).
             'slug' => 'revival', 'keep_all' => true, 'name' => 'Resurgimiento de Disney / Era 3D', 'period' => '2009-presente',
-            'source' => ['type' => 'ids', 'media' => 'movie', 'ids' => [
-                10198, 38757, 51162, 82690, 109445, 177572, 269149, 277834, 404368, 330457,
-                527774, 568124, 877269, 1022796, 1241982, 1084242,
-            ]],
+            'sources' => [
+                ['type' => 'ids', 'media' => 'movie', 'ids' => [
+                    10198, 38757, 51162, 82690, 109445, 177572, 269149, 277834, 404368, 330457,
+                    527774, 568124, 877269, 1022796, 1241982, 1084242,
+                ]],
+                ['type' => 'discover', 'media' => 'movie', 'params' => [
+                    'with_companies' => '6125', 'with_genres' => '16', 'without_genres' => '99,10770',
+                    'with_runtime.gte' => 40, 'primary_release_date.gte' => '2009-01-01',
+                ]],
+            ],
         ],
         [
             'slug' => 'pixar', 'name' => 'Pixar', 'period' => '1995-presente',
