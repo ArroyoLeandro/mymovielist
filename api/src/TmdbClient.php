@@ -38,6 +38,10 @@ final class TmdbClient
     public $deadline = null;
     /** @var resource|\CurlHandle|null reused between requests (keep-alive: no new TLS handshake per call) */
     private $ch = null;
+    /** @var list<resource|\CurlHandle> handles reused by getMany() (keep-alive per parallel slot) */
+    private $pool = [];
+    /** @var resource|\CurlMultiHandle|null the multi handle owns the connection cache: kept for the client's lifetime */
+    private $mh = null;
 
     public function __construct(string $apiKey, string $readToken, ?string $cacheDir, string $caBundle = '', int $cacheTtl = 86400)
     {
@@ -114,10 +118,19 @@ final class TmdbClient
         $retry = [];
         foreach (array_chunk($todo, self::PARALLEL, true) as $chunk) {
             $this->checkDeadline();
-            $mh = curl_multi_init();
+            if ($this->mh === null) {
+                $this->mh = curl_multi_init();
+            }
+            $mh = $this->mh;
             $handles = [];
+            $slot = 0;
             foreach ($chunk as $k => $t) {
-                $h = curl_init();
+                if (!isset($this->pool[$slot])) {
+                    $this->pool[$slot] = curl_init();
+                } else {
+                    curl_reset($this->pool[$slot]);
+                }
+                $h = $this->pool[$slot++];
                 curl_setopt_array($h, $this->curlOptions($this->url($t[0], $t[2]), $this->headers()));
                 curl_multi_add_handle($mh, $h);
                 $handles[$k] = $h;
@@ -125,8 +138,8 @@ final class TmdbClient
             $this->requests += count($handles);
             do {
                 $status = curl_multi_exec($mh, $running);
-                if ($running) {
-                    curl_multi_select($mh, 1.0);
+                if ($running && curl_multi_select($mh, 0.05) === -1) {
+                    usleep(5000); // short select timeout: on some builds (Windows) select waits the whole timeout
                 }
             } while ($running && $status === CURLM_OK);
             foreach ($handles as $k => $h) {
@@ -134,9 +147,7 @@ final class TmdbClient
                 $code = (int) curl_getinfo($h, CURLINFO_HTTP_CODE);
                 $body = substr((string) $raw, (int) curl_getinfo($h, CURLINFO_HEADER_SIZE));
                 curl_multi_remove_handle($mh, $h);
-                curl_close($h);
                 if ($code === 401) {
-                    curl_multi_close($mh);
                     throw new \RuntimeException('TMDB rejected the credentials (HTTP 401). Check tmdb.api_key / tmdb.read_token in config.php.');
                 }
                 if ($code === 404) {
@@ -153,7 +164,6 @@ final class TmdbClient
                     $this->writeCache($chunk[$k][0] . '?' . $chunk[$k][2], $json);
                 }
             }
-            curl_multi_close($mh);
             $this->last = microtime(true);
         }
         foreach ($retry as $k => $t) {
