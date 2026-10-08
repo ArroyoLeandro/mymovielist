@@ -20,6 +20,7 @@ const SORTS: [string, string][] = [
   ['year', 'Año'],
   ['score', 'Puntaje del grupo'],
   ['title', 'Título A-Z'],
+  ['added', 'Agregadas recientemente'],
 ]
 const KEYS = ['type', 'studio', 'decade', 'status', 'sort', 'q', 'provider', 'ptype'] as const
 

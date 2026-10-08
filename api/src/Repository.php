@@ -115,13 +115,15 @@ final class Repository
         )->fetchAll();
 
         $movies = $this->run(
-            'SELECT m.id, m.section_id, m.title, m.original_title, m.year, m.release_date, m.poster_url, m.media_type, m.tmdb_id,
-                    m.providers_link, c.slug AS collection_slug, c.name AS collection_name, c.poster_url AS collection_poster
+            "SELECT m.id, m.section_id, m.title, m.original_title, m.year, m.release_date, m.poster_url, m.media_type, m.tmdb_id,
+                    m.providers_link, c.slug AS collection_slug, c.name AS collection_name, c.poster_url AS collection_poster,
+                    CASE WHEN m.source = 'manual' THEN ab.tag END AS added_by_tag
              FROM movies m
              JOIN sections sec ON sec.id = m.section_id
              LEFT JOIN collections c ON c.id = m.collection_id
+             LEFT JOIN users ab ON ab.id = m.added_by_user_id
              WHERE sec.studio_id = ?
-             ORDER BY m.sort_order, m.id',
+             ORDER BY m.sort_order, m.id",
             [$studioId]
         )->fetchAll();
 
@@ -153,6 +155,7 @@ final class Repository
                 'collection' => $m['collection_slug'] === null ? null : ['slug' => $m['collection_slug'], 'name' => $m['collection_name']],
                 'providers' => $pmap[(int) $m['id']] ?? [],
                 'providersLink' => $m['providers_link'],
+                'addedBy' => $m['added_by_tag'],
             ];
             if ($m['collection_slug'] !== null) {
                 $date = $m['release_date'] ?: sprintf('%04d-01-01', (int) $m['year']);
@@ -560,15 +563,17 @@ final class Repository
     public function userList(array $user): array
     {
         $rows = $this->run(
-            'SELECT m.id, m.title, m.original_title, m.year, m.poster_url, m.media_type, m.providers_link, e.score, e.watched_at,
+            "SELECT m.id, m.title, m.original_title, m.year, m.poster_url, m.media_type, m.providers_link, e.score, e.watched_at,
                     sec.slug AS section_slug, sec.name AS section_name,
-                    s.slug AS studio_slug, s.name AS studio_name, s.logo_url
+                    s.slug AS studio_slug, s.name AS studio_name, s.logo_url,
+                    CASE WHEN m.source = 'manual' THEN ab.tag END AS added_by_tag
              FROM watch_entries e
              JOIN movies m ON m.id = e.movie_id
              JOIN sections sec ON sec.id = m.section_id
              JOIN studios s ON s.id = sec.studio_id
+             LEFT JOIN users ab ON ab.id = m.added_by_user_id
              WHERE e.user_id = ?
-             ORDER BY e.watched_at DESC, m.id',
+             ORDER BY e.watched_at DESC, m.id",
             [$user['id']]
         )->fetchAll();
 
@@ -607,6 +612,7 @@ final class Repository
                     'section' => ['slug' => $r['section_slug'], 'name' => $r['section_name']],
                     'providers' => $pmap[(int) $r['id']] ?? [],
                     'providersLink' => $r['providers_link'],
+                    'addedBy' => $r['added_by_tag'],
                 ],
                 'score' => $score,
                 'watchedAt' => self::iso($r['watched_at']),
@@ -804,9 +810,12 @@ final class Repository
 
     // ---- global catalog: home rows, filtered titles, search ----
 
-    private const TITLE_COLS = 'm.id, m.title, m.original_title, m.year, m.poster_url, m.media_type, m.tmdb_id, m.providers_link,
-        sec.slug AS section_slug, sec.name AS section_name, s.slug AS studio_slug, s.name AS studio_name, s.kind AS studio_kind';
-    private const TITLE_FROM = 'FROM movies m JOIN sections sec ON sec.id = m.section_id JOIN studios s ON s.id = sec.studio_id';
+    private const TITLE_COLS = "m.id, m.title, m.original_title, m.year, m.poster_url, m.media_type, m.tmdb_id, m.providers_link,
+        sec.slug AS section_slug, sec.name AS section_name, s.slug AS studio_slug, s.name AS studio_name, s.kind AS studio_kind,
+        CASE WHEN m.source = 'manual' THEN ab.tag END AS added_by_tag";
+    private const TITLE_FROM = 'FROM movies m JOIN sections sec ON sec.id = m.section_id JOIN studios s ON s.id = sec.studio_id
+        LEFT JOIN users ab ON ab.id = m.added_by_user_id';
+    private const ADDED_ORDER = "DATE(m.added_at) DESC, (m.source = 'manual') DESC, m.added_at DESC, m.release_date DESC, m.popularity DESC, m.id";
     private const STATS_JOIN = 'LEFT JOIN (SELECT movie_id, COUNT(*) AS watchers, AVG(score) AS avg_score, COUNT(score) AS scored
                                             FROM watch_entries GROUP BY movie_id) w ON w.movie_id = m.id';
 
@@ -828,6 +837,7 @@ final class Repository
             'section' => ['slug' => $r['section_slug'], 'name' => $r['section_name']],
             'providers' => $pmap[(int) $r['id']] ?? [],
             'providersLink' => $r['providers_link'],
+            'addedBy' => $r['added_by_tag'],
         ];
     }
 
@@ -939,6 +949,9 @@ final class Repository
         };
         $popular = 'm.popularity DESC, m.vote_count DESC, m.id';
 
+        // New in the catalog (weekly sync and titles added by hand), newest first: by day, then hand-picked first.
+        $titles('recent', 'Estrenos y agregadas recientemente', '/catalogo?sort=added',
+            $this->titleQuery('', 'm.added_at >= ?', self::ADDED_ORDER, [date('Y-m-d H:i:s', time() - 30 * 86400)], 20));
         $titles('most-watched', 'Lo más visto del grupo', '/catalogo?sort=group-watched',
             $this->titleQuery(self::STATS_JOIN, 'w.watchers IS NOT NULL', 'w.watchers DESC, ' . $popular, [], 20));
         $titles('best-rated', 'Mejor puntuadas por el grupo', '/catalogo?sort=score',
@@ -1063,6 +1076,7 @@ final class Repository
             'score' => 'w.avg_score IS NULL, w.avg_score DESC, w.scored DESC, m.popularity DESC, m.id',
             'group-watched' => 'w.watchers IS NULL, w.watchers DESC, m.popularity DESC, m.id',
             'title' => 'm.title ASC, m.id',
+            'added' => 'm.added_at IS NULL, ' . self::ADDED_ORDER,
         ];
         $order = $orders[(string) ($f['sort'] ?? '')] ?? 'm.popularity DESC, m.vote_count DESC, m.id';
         $join = strpos($order, 'w.') !== false ? self::STATS_JOIN : '';
@@ -1122,6 +1136,45 @@ final class Repository
         usort($ranked, fn(array $a, array $b) => [$a[0], $a[1]] <=> [$b[0], $b[1]]);
         $top = array_map(fn(array $x) => $x[2], array_slice($ranked, 0, 30));
         return $this->withStates($top, $userId);
+    }
+
+    /** One title with the viewer's state (global title shape), or null. @return array<string, mixed>|null */
+    public function titleById(int $id, int $userId): ?array
+    {
+        $raw = $this->titleQuery('', 'm.id = ?', 'm.id', [$id], 1);
+        return $raw ? $this->withStates($raw, $userId)[0] : null;
+    }
+
+    /**
+     * Which TMDB titles are already in the catalog.
+     * @param list<array{0: string, 1: int}> $refs [media_type ('movie'|'series'), tmdb id]
+     * @return array<string, array{id: int, studioSlug: string}> keyed 'movie:<id>' / 'series:<id>'
+     */
+    public function catalogIdsByTmdb(array $refs): array
+    {
+        if (!$refs) {
+            return [];
+        }
+        $cond = implode(' OR ', array_fill(0, count($refs), '(m.media_type = ? AND m.tmdb_id = ?)'));
+        $params = [];
+        foreach ($refs as $r) {
+            $params[] = $r[0];
+            $params[] = (int) $r[1];
+        }
+        $out = [];
+        foreach ($this->run('SELECT m.id, m.media_type, m.tmdb_id, s.slug FROM movies m JOIN sections sec ON sec.id = m.section_id
+                             JOIN studios s ON s.id = sec.studio_id WHERE ' . $cond, $params)->fetchAll() as $r) {
+            $out[$r['media_type'] . ':' . $r['tmdb_id']] = ['id' => (int) $r['id'], 'studioSlug' => $r['slug']];
+        }
+        return $out;
+    }
+
+    /** @return array{slug: string, name: string, kind: string}|null */
+    public function studioOfTitle(int $id): ?array
+    {
+        $r = $this->run('SELECT s.slug, s.name, s.kind FROM movies m JOIN sections sec ON sec.id = m.section_id
+                         JOIN studios s ON s.id = sec.studio_id WHERE m.id = ?', [$id])->fetch();
+        return $r ? ['slug' => $r['slug'], 'name' => $r['name'], 'kind' => $r['kind']] : null;
     }
 
     private function user(string $sql, array $params): ?array
