@@ -108,11 +108,7 @@ php bin/refresh-providers.php                        # titles never fetched or o
 
 Flags: `--country=AR`, `--stale-days=7` (0 = every title), `--limit=N`, `--studio=<slug>`, `--dry-run`, `--verbose`. No response cache (providers change weekly). A title without data for the country gets no rows but its timestamp is set, so it is retried only when stale. Channel/tier duplicates (e.g. "Crunchyroll Amazon Channel" next to "Crunchyroll" for the same type) are hidden. A lock file in `api/storage/` prevents overlapping runs. Exit codes: 0 ok, 1 error or some titles failed, 2 bad arguments, 3 another run in progress.
 
-Weekly cron on Hostinger (hPanel > Advanced > Cron Jobs; the deploy layout puts the backend in `<webroot>/_app`):
-
-```
-0 5 * * 1 /usr/bin/php /home/<user>/domains/<domain>/public_html/_app/bin/refresh-providers.php --stale-days=6 >> /home/<user>/domains/<domain>/public_html/_app/storage/providers.log 2>&1
-```
+On production the providers refresh runs inside the weekly sync (see "Automatic catalog growth" below); the old providers-only cron is replaced by it.
 
 API (all behind the session):
 
@@ -120,8 +116,55 @@ API (all behind the session):
 - `GET /api/studios/{slug}/movies` also returns a top-level `providers: {"<id>": {name, logoUrl}}` dictionary with the providers used in that payload. Other endpoints resolve ids with `GET /api/providers` (static, ETag): `[{id, name, logoUrl, titleCount, flatrateCount}]`, most used first; `?used=1` lists only providers with at least one title (for the filter UI).
 - `GET /api/titles` filters: `provider=<id>[,<id>]` and `ptype=flatrate|rent|buy|any` (`flatrate` also matches `free` and `ads`; without `ptype` any type matches; `ptype` alone means "has any provider of that type").
 
-Production runbook: back up, apply 006, upload `api/`, run `php _app/bin/refresh-providers.php` once (SSH, or a one-off cron with `--stale-days=0`), then add the weekly cron above.
+Production runbook: back up, apply 006, upload `api/`, run `php _app/bin/refresh-providers.php` once (SSH, or a one-off cron with `--stale-days=0`).
 
 ### Dismissing received recommendations (migration 007)
 
 Apply `api/database/migrations/007_recommendation_dismiss.sql` once (adds `recommendations.dismissed_at`; additive and re-runnable, no data is touched). `POST /api/recommendations/{id}/dismiss` hides a received recommendation for its recipient (403 for anyone else, 404 if unknown) and `DELETE /api/recommendations/{id}/dismiss` undoes it; the sender still sees it (with `dismissed: true`) and re-sending it brings it back. Production runbook: back up, apply 007, upload `api/` and the `web` build.
+
+### Automatic catalog growth (migration 008, weekly sync)
+
+Apply `api/database/migrations/008_catalog_growth.sql` once (adds `movies.added_at`, `movies.source` `rule|manual` and `movies.added_by_user_id` FK to `users` ON DELETE SET NULL; additive and re-runnable; existing rows get `added_at = 2026-01-01` so they never flood the "recent" row).
+
+Curation rules (`api/src/CatalogImporter.php`, overridable with `'catalog' => [...]` in `config.php`):
+
+- Normal thresholds as before (movies 500 votes, series 100; categories: Películas 5000, Series 1000, Anime 200/500).
+- Recent releases (released in the last 12 months) enter with a relaxed threshold `max(floor, normal x 0.1)`: floors 50 votes for movies and 20 for series, so studios need 50/20, Películas 500, Series 100, Anime 20/50. A movie trending right now (TMDB popularity >= 150 and >= 20 votes) also enters. Discover sources that ask TMDB for more votes get an extra pass over the last 12 months (most popular first) with the relaxed count. Checked against TMDB on 2026-10-08: the first run added 252 titles (102 Películas, 82 Series, 61 Anime, 7 in studios). Popularity alone was not used as an entry rule: TMDB lists zero-vote titles with popularity above 100.
+- Prune never removes titles released in the last 18 months (grace), titles added by hand (`source = 'manual'`) or titles with user data (watch entries, watchlist, recommendations) or in `always-keep.php`. After 18 months a title must meet the normal threshold. `--max-prune=N` skips a studio whose prune would delete more than N rows.
+- The WDAS "Resurgimiento" section also discovers new Walt Disney Animation Studios features (company 6125, animation, >= 40 min, since 2009) next to the explicit canon.
+- New rows get `added_at`; `GET /api/home` starts with "Estrenos y agregadas recientemente" (added in the last 30 days, newest day first, hand-added first; omitted when empty) and `GET /api/titles?sort=added` lists the same order.
+- The TMDB disk cache (`storage/tmdb-cache`, gzip) keeps responses 6 days, so every weekly run fetches fresh discover pages and details; files older than 7 days are deleted when a sync starts.
+
+`bin/weekly-sync.php` runs the whole sync in one process: import every studio (in import order), prune (skipped if an import step failed; at most 25 deletions per studio, `catalog.max_prune`), refresh watch providers older than 6 days. One line per step goes to stdout, the detailed log of the last run to `storage/weekly-sync-detail.log`. It shares a lock with `/admin` (a run without progress for 15 min frees it). Exit codes: 0 ok, 1 a step failed, 2 bad arguments, 3 another sync holds the lock. Flags: `--mode=full|import|providers`, `--stale-days=6`, `--limit=N` (providers), `--config=path`.
+
+Cron (hPanel > Advanced > Cron Jobs), Mondays 04:00, replacing the old providers-only cron:
+
+```
+0 4 * * 1 /usr/bin/php /home/u465057680/domains/sistemasfa.com/public_html/mymovielist/_app/bin/weekly-sync.php >> /home/u465057680/domains/sistemasfa.com/public_html/mymovielist/_app/storage/weekly-sync.log 2>&1
+```
+
+A full run takes about 1 minute with a warm cache; with a cold cache (first run, or weekly) a few minutes, mostly provider refreshes (~2900 titles at ~25/s).
+
+### Adding missing titles by hand ("¿No está? Agrégalo")
+
+- `GET /api/tmdb/search?q=` (session): TMDB movies and series in es-MX, up to 12 `{tmdbId, mediaType: movie|series, title, originalTitle, year, posterUrl, voteCount, released, inCatalog: {id, studioSlug}|null}`. Titles and posters are resolved like the importer (LATAM first). 20 searches per minute per session (`429 {code: 'rate_limited', retryAfter}`), TMDB responses cached 24 h.
+- `POST /api/titles/import {tmdbId, mediaType}`: `201 {created: true, title, studio: {slug, name, kind}}`, or `200 {created: false, ...}` when the title is already in the catalog (idempotent; unique `media_type + tmdb_id`). `422 {code: 'unreleased'}` for titles not released yet, `404 {code: 'not_found'}` when TMDB does not know it, `502 {code: 'tmdb_unavailable'}`. Placement: the first studio section whose definition source matches the title (companies, networks, genres, language, dates, collections, explicit ids; vote counts ignored); else a studio that produced it (keeping animation and live action apart) in an "Agregadas por el grupo" section created on demand; else the category for its type (anime = animation + Japanese, series, peliculas), in the matching section or "Agregadas por el grupo". The row gets `source = 'manual'`, `added_by_user_id` and `added_at`, and its Argentina providers are fetched right away. Title payloads carry `addedBy` (tag) for manual titles.
+
+### Admin: sync on demand (`/admin`)
+
+Shared hosting has no `exec()` and cuts long requests, so the page drives the sync one step per request (`src/CatalogSync.php`, the same steps the cron runs; each request is time-boxed to 40 s of TMDB work and answers `partial` when the step must continue).
+
+Setup: `php bin/hash-password.php "<admin password>"` and put the hash in `admin_password_hash` in `config.php` (a different password from the site one). Without it the endpoints answer 503.
+
+- `POST /api/admin/unlock {password}`: unlocks for 30 min (sliding). Failures wait 800 ms; after 5 the session is locked out for 10 min (429).
+- `GET /api/admin/status`: `{unlocked}` and, when unlocked, `running` (live run or null), `lockExpiresIn`, `lastRun` (steps with results and totals) and step counts per mode.
+- `POST /api/admin/sync/start {mode: full|import|providers, limit?, staleDays?}` (409 `locked` while the cron or another run holds the lock), `POST /api/admin/sync/step {runId, index}`, `POST /api/admin/sync/finish {runId, cancelled?}`.
+
+### Production runbook (T25-T27)
+
+1. Back up the database.
+2. Apply `api/database/migrations/008_catalog_growth.sql`.
+3. Add `admin_password_hash` to the server's `config.php` (generate it locally with `php bin/hash-password.php`).
+4. Upload `api/` (new `src/` classes, `bin/weekly-sync.php`, `public/index.php`) and the `web` build.
+5. Replace the providers cron with the weekly-sync cron above.
+6. Optionally run the first sync from `/admin` ("Sincronizar todo") and watch it; otherwise the cron does it on Monday.
