@@ -25,6 +25,7 @@ export const titleLink = (studioSlug: string, id: number) => `/studio/${studioSl
 function errorMessage(e: unknown): string {
   if (e instanceof ApiError) {
     if (e.code === 'unreleased') return 'Todavía no se estrenó: solo se pueden agregar títulos ya estrenados.'
+    if (e.code === 'excluded') return 'Este título está excluido del catálogo.'
     if (e.code === 'not_found') return 'TMDB ya no tiene este título.'
     if (e.code === 'tmdb_unavailable' || e.status === 502) return 'TMDB no respondió. Inténtalo de nuevo en un momento.'
     if (e.status === 401) return e.message

@@ -18,7 +18,7 @@ function failText(e: unknown, q: string): string {
   return `No se pudo buscar “${q}” en TMDB.`
 }
 
-/** What can be done with a TMDB result: open it (already in the catalog), add it, or nothing yet (unreleased). */
+/** What can be done with a TMDB result: open it (already in the catalog), add it, or nothing (excluded, unreleased). */
 function Action({ r, state, onAdd, onNavigate }: { r: TmdbResult; state: AddState | undefined; onAdd: () => void; onNavigate?: () => void }) {
   if (state?.status === 'added') {
     const res = state.result
@@ -36,6 +36,7 @@ function Action({ r, state, onAdd, onNavigate }: { r: TmdbResult; state: AddStat
       </Link>
     )
   }
+  if (r.excluded) return <span className="tag" title="Duplica otro título o no es parte del catálogo">Excluido del catálogo</span>
   if (!r.released) return <span className="tag">Sin estrenar</span>
   if (state?.status === 'adding') {
     return (

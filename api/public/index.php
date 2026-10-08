@@ -192,6 +192,9 @@ try {
         try {
             $res = (new CatalogImporter($pdo, $tmdb, (array) ($config['catalog'] ?? [])))->importManual($media === 'movie' ? 'movie' : 'tv', $tmdbId, $current['id']);
         } catch (DomainException $e) {
+            if ($e->getCode() === CatalogImporter::EXCLUDED) {
+                throw new HttpError(422, 'This title is excluded from the catalog.', 'excluded');
+            }
             throw new HttpError(422, 'Only released titles can be added.', 'unreleased');
         } catch (PDOException $e) {
             throw $e;

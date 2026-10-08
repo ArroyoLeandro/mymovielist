@@ -33,7 +33,7 @@ final class TmdbSearch
 
     /**
      * @return list<array<string, mixed>> {tmdbId, mediaType: movie|series, title, originalTitle, year, posterUrl,
-     *         voteCount, released, inCatalog: {id, studioSlug}|null}
+     *         voteCount, released, inCatalog: {id, studioSlug}|null, excluded}
      */
     public function search(string $q): array
     {
@@ -64,6 +64,7 @@ final class TmdbSearch
             return [$r['media_type'] === 'tv' ? 'series' : 'movie', (int) $r['id']];
         }, $hits));
         $overrides = require StudioDefinitions::dir() . '/title-overrides.php';
+        $exclusions = StudioDefinitions::exclusions();
         $today = date('Y-m-d');
 
         $out = [];
@@ -89,6 +90,8 @@ final class TmdbSearch
                 'voteCount' => (int) ($src['vote_count'] ?? 0),
                 'released' => $date !== '' && $date <= $today,
                 'inCatalog' => $catalog[$dbMedia . ':' . (int) $r['id']] ?? null,
+                // The manual import refuses these (exclusions.php); without details only the listed titles are known.
+                'excluded' => StudioDefinitions::isExcluded($d ?? ['id' => (int) $r['id']], $media, $exclusions),
             ];
         }
         return $out;

@@ -89,8 +89,9 @@ try {
 
     $pdo->beginTransaction();
     $sel = $pdo->prepare(
+        // LEFT JOINs: a title whose section or studio is gone still exists and can be merged.
         'SELECT m.id, m.media_type, m.tmdb_id, m.title, m.year, m.source, st.slug AS studio
-         FROM movies m JOIN sections sec ON sec.id = m.section_id JOIN studios st ON st.id = sec.studio_id
+         FROM movies m LEFT JOIN sections sec ON sec.id = m.section_id LEFT JOIN studios st ON st.id = sec.studio_id
          WHERE m.id = ? FOR UPDATE'
     );
     $rows = [];
@@ -103,7 +104,7 @@ try {
         }
     }
     $label = function (array $r): string {
-        return sprintf('#%d %s:%s "%s" (%d) [%s]', $r['id'], $r['media_type'], $r['tmdb_id'] ?? 'NULL', $r['title'], $r['year'], $r['studio']);
+        return sprintf('#%d %s:%s "%s" (%d) [%s]', $r['id'], $r['media_type'], $r['tmdb_id'] ?? 'NULL', $r['title'], $r['year'], $r['studio'] ?? 'no studio');
     };
     if ($rows['from']['media_type'] !== $rows['to']['media_type'] && !isset($opts['allow-cross-media'])) {
         $pdo->rollBack();

@@ -38,6 +38,9 @@ final class CatalogImporter
         'trending_min_votes' => 20,      // ...when it has at least this many votes (filters zero-vote spam)
     ];
     public const MANUAL_SECTION = ['slug' => 'agregadas', 'name' => 'Agregadas por el grupo', 'sort_order' => 999];
+    /** importManual() refusals (\DomainException codes). */
+    public const UNRELEASED = 1;
+    public const EXCLUDED = 2;
 
     /** @var PDO */
     private $pdo;
@@ -534,7 +537,8 @@ final class CatalogImporter
      * Idempotent: an existing (media, tmdb id) row is returned as is.
      * @param string $media 'movie' or 'tv'
      * @return array{id: int, created: bool}|null null when TMDB does not know the title
-     * @throws \DomainException when the title is not released yet
+     * @throws \DomainException code UNRELEASED when the title is not released yet, EXCLUDED when exclusions.php lists
+     *         the title or one of its production companies
      */
     public function importManual(string $media, int $tmdbId, ?int $userId): ?array
     {
@@ -548,9 +552,12 @@ final class CatalogImporter
         if ($d === null) {
             return null;
         }
+        if (StudioDefinitions::isExcluded($d, $media, $this->exclusions())) {
+            throw new \DomainException('Excluded from the catalog.', self::EXCLUDED);
+        }
         $date = (string) ($d[$media === 'tv' ? 'first_air_date' : 'release_date'] ?? '');
         if ($date === '' || $date > date('Y-m-d')) {
-            throw new \DomainException('Not released yet.');
+            throw new \DomainException('Not released yet.', self::UNRELEASED);
         }
         $dir = StudioDefinitions::dir();
         $item = $this->item($d, $media, require $dir . '/title-overrides.php');

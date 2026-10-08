@@ -130,6 +130,8 @@ export interface TmdbResult {
   voteCount: number
   released: boolean
   inCatalog: { id: number; studioSlug: string } | null
+  /** Listed in the catalog exclusions (pilots, mockbusters): it cannot be added. */
+  excluded?: boolean
 }
 export interface ImportResult { created: boolean; title: StateTitle; studio: { slug: string; name: string; kind: 'studio' | 'category' } }
 
