@@ -10,7 +10,7 @@ export type CardMovie = Pick<TitleSummary, 'id' | 'title' | 'originalTitle' | 'y
 const LABELS = ['Horrible', 'Malo', 'Flojo', 'Regular', 'Pasable', 'Decente', 'Bueno', 'Muy bueno', 'Excelente', 'Obra maestra']
 const tier = (s: number | null) => (s === null ? '' : s <= 4 ? 'low' : s <= 7 ? 'mid' : 'high')
 
-/** Title card: watched toggle, 1-10 score, "Quiero verla", recommend, and the group's ratings. */
+/** Title card: watched toggle, 1-10 score, icon actions on the poster (watched, wishlist, recommend), and the group's ratings. */
 const TitleCard = memo(function TitleCard({ movie: m, r, me, onSave, onPending, label }: {
   movie: CardMovie; r: RatingRow | undefined; me: string; onSave: SaveFn; onPending: PendingFn; label?: string
 }) {
@@ -52,14 +52,41 @@ const TitleCard = memo(function TitleCard({ movie: m, r, me, onSave, onPending, 
       <div className="art">
         <Poster url={m.posterUrl} title={m.title} />
         {m.mediaType === 'series' && <span className="badge">Serie</span>}
-        <button
-          className={`check ${watched ? 'on' : ''}`}
-          aria-pressed={watched}
-          aria-label={watched ? `Quitar ${m.title} de las vistas` : `Marcar ${m.title} como vista`}
-          onClick={() => void onSave(m.id, !watched, null)}
-        >
-          {watched ? '✓' : '+'}
-        </button>
+        <div className="art-actions">
+          <button
+            className={`check ${watched ? 'on' : ''}`}
+            aria-pressed={watched}
+            aria-label={watched ? `Quitar ${m.title} de las vistas` : `Marcar ${m.title} como vista`}
+            data-tip={watched ? 'Quitar de vistas' : 'Marcar como vista'}
+            onClick={() => void onSave(m.id, !watched, null)}
+          >
+            {watched ? '✓' : '+'}
+          </button>
+          {!watched && (
+            <button
+              className={`check ${pending ? 'on' : ''}`}
+              aria-pressed={pending}
+              aria-label={pending ? `Quitar ${m.title} de pendientes` : `Quiero ver ${m.title}`}
+              data-tip={pending ? 'Quitar de pendientes' : 'Quiero verla'}
+              onClick={() => void wish()}
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill={pending ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinejoin="round">
+                <path d="M6 3h12v18l-6-4.5L6 21z" />
+              </svg>
+            </button>
+          )}
+          <button
+            className="check"
+            aria-label={`Recomendar ${m.title} a un amigo`}
+            aria-haspopup="dialog"
+            data-tip="Recomendar a un amigo"
+            onClick={() => setRecommending(true)}
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 2 11 13M22 2l-7 20-4-9-9-4z" />
+            </svg>
+          </button>
+        </div>
       </div>
       <h3>{m.title}</h3>
       <p className="year">{m.year}{m.originalTitle ? ` · ${m.originalTitle}` : ''}</p>
@@ -83,14 +110,6 @@ const TitleCard = memo(function TitleCard({ movie: m, r, me, onSave, onPending, 
             {n}
           </button>
         ))}
-      </div>
-      <div className="card-actions">
-        {!watched && (
-          <button className={`mini-btn ${pending ? 'on' : ''}`} aria-pressed={pending} onClick={() => void wish()}>
-            {pending ? '★ En pendientes' : '☆ Quiero verla'}
-          </button>
-        )}
-        <button className="mini-btn" onClick={() => setRecommending(true)} aria-haspopup="dialog">Recomendar…</button>
       </div>
       {failed && <p className="error small">No se pudo guardar. Inténtalo de nuevo.</p>}
       <p className="community">
