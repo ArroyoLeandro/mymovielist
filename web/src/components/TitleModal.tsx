@@ -11,6 +11,7 @@ import { useVersions } from '../queries'
 import Poster from './Poster'
 import { WhereToWatch } from './Providers'
 import ScoreMeter from './ScoreMeter'
+import Trailers from './Trailers'
 import type { CardMovie, PendingFn, SaveFn } from './TitleCard'
 
 /** "Otras versiones": remakes, reboots, the series and the movie... each opens in this modal. Hidden when none. */
@@ -41,7 +42,7 @@ function Versions({ id, onOpen }: { id: number; onOpen: (t: StateTitle) => void 
   )
 }
 
-/** Title detail: the user's own controls first, then where to watch, other versions, every viewer's score and quiet group stats. */
+/** Title detail: the user's own controls first, then trailers, where to watch, other versions, every viewer's score and quiet group stats. */
 export default function TitleModal({ movie: m, r, me, onSave, onPending, studioName, sectionName, paused, onRecommend, onOpen, onClose }: {
   movie: CardMovie; r: RatingRow | undefined; me: string; onSave: SaveFn; onPending: PendingFn
   studioName?: string; sectionName?: string; paused: boolean; onRecommend: () => void
@@ -123,6 +124,7 @@ export default function TitleModal({ movie: m, r, me, onSave, onPending, studioN
             />
           </section>
 
+          <Trailers id={m.id} />
           <WhereToWatch id={m.id} refs={m.providers} link={m.providersLink} />
           <Versions id={m.id} onOpen={onOpen} />
 

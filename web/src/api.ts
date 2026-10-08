@@ -34,6 +34,17 @@ export interface RatingRow {
   watchersCount: number
   averageScore: number | null
 }
+/** A YouTube trailer (watch URL: https://www.youtube.com/watch?v=<key>). */
+export interface Trailer { key: string; name: string }
+/**
+ * Trailers of a title: in its original language (or English, flagged `fallback`, when there is none and the original
+ * language is not English) and a Latin-American Spanish dub. `unavailable`: TMDB failed; try again on a later open.
+ */
+export interface Trailers {
+  original: (Trailer & { lang: string; fallback: boolean }) | null
+  latino: Trailer | null
+  unavailable?: boolean
+}
 export interface Section { slug: string; name: string; period: string; movies: Movie[] }
 /** Collection with 2+ titles in the studio; titleIds are in release order. */
 export interface Saga { slug: string; name: string; posterUrl: string | null; titleIds: number[] }
@@ -235,6 +246,7 @@ export const api = {
   search: (q: string) => request<StateTitle[]>('GET', `/search?q=${encodeURIComponent(q)}`),
   /** Other versions of a title (remakes, the series and the movie...), oldest first. */
   versions: (id: number) => request<StateTitle[]>('GET', `/titles/${id}/versions`),
+  trailers: (id: number) => request<Trailers>('GET', `/titles/${id}/trailers`),
   setPending: (id: number, pending: boolean) => request<void>(pending ? 'PUT' : 'DELETE', `/movies/${id}/watchlist`),
   recommend: (id: number, toTags: string[], note: string) =>
     request<{ sentTo: string[] }>('POST', `/movies/${id}/recommendations`, { toTags, note: note.trim() || null }),

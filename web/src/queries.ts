@@ -57,6 +57,18 @@ export const useTitlesList = (filters: TitleFilters) =>
 export const useVersions = (id: number) =>
   useQuery({ queryKey: ['versions', id], queryFn: () => api.versions(id), staleTime: 10 * 60 * 1000, refetchOnWindowFocus: false })
 
+// Trailers (TMDB, cached by the server for days): fetched when a title modal opens and kept for the session. A TMDB
+// failure comes back as an empty `unavailable` answer: stale at once, so the next open of that title asks again.
+export const useTrailers = (id: number) =>
+  useQuery({
+    queryKey: ['trailers', id],
+    queryFn: () => api.trailers(id),
+    staleTime: (q) => (q.state.data?.unavailable ? 0 : Infinity),
+    gcTime: 24 * HOUR,
+    refetchOnWindowFocus: false,
+    retry: false,
+  })
+
 export const useSearch = (q: string) =>
   useQuery({ queryKey: ['search', q], queryFn: () => api.search(q), enabled: q.length >= 2, staleTime: 15000, placeholderData: (prev) => prev })
 

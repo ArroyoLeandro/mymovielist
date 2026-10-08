@@ -315,6 +315,19 @@ final class Repository
         return $this->run('SELECT 1 FROM movies WHERE id = ?', [$movieId])->fetch() !== false;
     }
 
+    /**
+     * TMDB reference of a title, for on-demand TMDB lookups (trailers).
+     * @return array{mediaType: string, tmdbId: int|null}|null null when the title does not exist
+     */
+    public function tmdbRef(int $movieId): ?array
+    {
+        $r = $this->run('SELECT media_type, tmdb_id FROM movies WHERE id = ?', [$movieId])->fetch();
+        if ($r === false) {
+            return null;
+        }
+        return ['mediaType' => (string) $r['media_type'], 'tmdbId' => $r['tmdb_id'] === null ? null : (int) $r['tmdb_id']];
+    }
+
     /** Creates or updates the entry; keeps the original watched_at on updates. Returns the stored entry. */
     public function saveEntry(int $userId, int $movieId, ?int $score): array
     {
@@ -1299,9 +1312,12 @@ final class Repository
     }
 
     /**
-     * Version keys of a title row (Spanish and original title): folded, letters and digits only, without a leading
-     * article, so "La Bella y la Bestia", "Beauty and the Beast" and "Beauty & the Beast" compare by meaning, not
-     * spelling. Keys under VERSION_MIN_KEY characters are dropped: they are too generic ("Z", "Up", "It").
+     * Version keys of a title row: its Spanish title and its original title, each folded (case and accents), with
+     * '&' read as "and", reduced to letters and digits and stripped of a leading Spanish article (el, la, los, las,
+     * un, una). Two rows match when any key is equal, so "La Bella y la Bestia" matches "Bella y la Bestia" and
+     * "Beauty & the Beast" matches "Beauty and the Beast". There is no translation: a Spanish title only meets an
+     * English one when the other row's original_title spells it the same way. Keys under VERSION_MIN_KEY characters
+     * are dropped: they are too generic ("Z", "Up", "It").
      * @param array<string, mixed> $r row with title and original_title
      * @return array<string, true>
      */

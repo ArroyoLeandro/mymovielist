@@ -65,6 +65,14 @@
 .td-act.on:focus-visible { outline-color: var(--gold-ink); }
 .td-error { margin: calc(-1 * var(--s2)) var(--td-pr) var(--s3) var(--td-pl); }
 
+/* Trailers: YouTube links under the score (rendered only once TMDB has answered with at least one). */
+.td-trailers { min-width: 0; padding: var(--s3) var(--td-pr) var(--s3) var(--td-pl); border-top: 1px solid var(--line); }
+.td-trailers ul { display: flex; flex-wrap: wrap; gap: var(--s2); margin: 0; padding: 0; list-style: none; }
+.td-trailers li { display: flex; min-width: 0; }
+.td-trailer { min-height: 40px; padding-inline: var(--s3) var(--s4); }
+.td-trailer span { overflow: hidden; text-overflow: ellipsis; }
+.yt-icon { flex: none; width: 22px; height: 16px; }
+
 .td-mine { min-width: 0; padding: var(--s3) var(--td-pr) var(--s4) var(--td-pl); border-top: 1px solid var(--line); }
 .td-mine .meter-wrap { margin-top: 0; }
 

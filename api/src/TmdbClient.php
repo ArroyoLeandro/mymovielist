@@ -280,6 +280,7 @@ final class TmdbClient
     {
         for ($attempt = 1; $attempt <= 5; $attempt++) {
             if ($attempt > 1) {
+                $this->checkDeadline(); // a time-boxed caller gives up instead of waiting out every retry
                 $this->throttle();
             }
             $this->requests++;
