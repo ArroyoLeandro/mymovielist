@@ -68,6 +68,8 @@ User report (2026-10-08): the site feels full of repeated movies/series. Audit o
 
 - 009 applied in prod by the user (phpMyAdmin): check `0, 1, 0, 1`; watch_entries 3055 and watchlist 43 = backup counts (3058, 44) minus the merge conflicts computed from the backup (3 and 1): no user data lost.
 
+- Prod "Sincronizar todo" (user, after 009): all 18 steps ran; +3 titles (anime 1, series 2), providers 3/3; Warner animation "1 excluded" (Batman Beyond pilot stays out); prune kept every below-threshold title as referenced/always-keep/canon (nothing deleted).
+
 ## Next step
-User runs "Sincronizar todo" from /admin (fills the 3 titles without `animated`, applies exclusions). Feature complete; optional follow-ups: exclusion list for the 6 wrong version pairs, phone-width check of S2, review of the S4 slice.
+Feature complete; optional follow-ups: exclusion list for the 6 wrong version pairs, phone-width check of S2, review of the S4 slice.
 <!-- superseded: then the user decides delivery (push / merge / prod deploy with the runbook: backup, 010, upload api/ + web build, 009). -->
