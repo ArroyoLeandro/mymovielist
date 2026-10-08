@@ -19,6 +19,9 @@
   --line: #2b2859;
   --line-strong: #423e7c;
   --glass: #0b0a1ce0;
+  /* sticky header and toolbars: opaque, so scrolled posters never show through */
+  --bar-solid: var(--night);
+  --bar-shade: #00000059;
   --scrim: #050411b3;
 
   /* text and accents (text colors are AA on --night, --panel and --panel-2) */
@@ -158,7 +161,7 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
 /* ---------- 5. Header + global search ---------- */
 .nav {
   position: sticky; top: 0; z-index: 30;
-  background: var(--glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  background: var(--bar-solid);
   border-bottom: 1px solid var(--line);
 }
 /* Header content shares the page width so it lines up with the content below. */
@@ -437,15 +440,18 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
 
 /* ---------- 10. Sticky toolbar (studio page, /catalogo) ----------
    Sticks right under the header. The background bleeds to the viewport edges through border-image
-   (paint only: it never creates horizontal scroll). Height is exposed as --toolbar-h for anchors. */
-.sticky-sentinel { position: relative; top: calc(-1 * var(--header-h) - 1px); height: 1px; margin-bottom: -1px; visibility: hidden; pointer-events: none; }
+   (paint only: it never creates horizontal scroll), plus a 10px fading shade under the bottom line once stuck.
+   It tucks 1px under the header so a fractional header height never leaves a see-through seam.
+   The sentinel flips .stuck 16px before the bar reaches the header, so it is opaque before anything slides under it.
+   Height is exposed as --toolbar-h for anchors. */
+.sticky-sentinel { position: relative; top: calc(-1 * var(--header-h) - 17px); height: 1px; margin-bottom: -1px; visibility: hidden; pointer-events: none; }
 .sticky-bar {
-  --bar-bg: transparent; --bar-line: transparent;
-  position: sticky; top: var(--header-h); z-index: 20;
+  --bar-bg: transparent; --bar-line: transparent; --bar-drop: transparent;
+  position: sticky; top: calc(var(--header-h) - 1px); z-index: 20;
   padding: 10px 0;
-  border-image: linear-gradient(to top, var(--bar-line) 1px, var(--bar-bg) 1px) fill 0 / / 0 100vmax;
+  border-image: linear-gradient(to top, transparent, var(--bar-drop) 10px, var(--bar-line) 10px, var(--bar-line) 11px, var(--bar-bg) 11px) fill 0 / / 0 100vmax 10px;
 }
-.sticky-bar.stuck { --bar-bg: var(--glass); --bar-line: var(--line); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+.sticky-bar.stuck { --bar-bg: var(--bar-solid); --bar-line: var(--line); --bar-drop: var(--bar-shade); }
 .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px var(--s3); }
 .bar-name { display: none; }
 .bar-line { order: -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); min-width: 0; }
