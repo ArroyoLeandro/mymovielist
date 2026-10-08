@@ -1,0 +1,99 @@
+/* =============================================================================
+   "¿No está? Agrégalo": TMDB mode of the header search and the /catalogo panel.
+   Tokens, buttons, tags and posters live in index.css.
+   ============================================================================= */
+
+/* Entry row in the catalog dropdown: secondary, but promoted (tinted) when the catalog found little. */
+.search-tmdb {
+  display: grid; grid-template-columns: 34px minmax(0, 1fr); align-items: center; gap: var(--s3);
+  width: 100%; margin: 2px 0; padding: 8px; border: 1px dashed var(--line-strong); border-radius: 10px;
+  color: var(--text); text-align: left; transition: background-color var(--fast), border-color var(--fast);
+}
+.search-tmdb > svg { justify-self: center; color: var(--gold); }
+.search-tmdb strong { display: block; font-size: 0.9rem; font-weight: 600; }
+.search-tmdb small { display: block; color: var(--muted); font-size: 0.76rem; }
+.search-tmdb:hover, .search-tmdb:focus-visible { border-color: var(--gold); background: var(--panel-2); }
+.search-tmdb:focus-visible { outline-offset: -2px; }
+.search-tmdb.is-promoted { border-style: solid; border-color: #d4f52640; background: #d4f5260d; }
+
+/* TMDB mode */
+.search-drop.is-tmdb { width: min(480px, calc(100vw - 2 * var(--gutter))); padding-top: 0; }
+.tmdb-head {
+  position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: var(--s2);
+  margin: 0 -6px 4px; padding: 8px 10px; border-bottom: 1px solid var(--line); background: var(--panel);
+}
+.tmdb-back {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px; border-radius: var(--r-pill);
+  color: var(--muted); font-size: 0.85rem; font-weight: 600;
+}
+.tmdb-back:hover, .tmdb-back:focus-visible { color: var(--text); background: var(--panel-2); }
+.tmdb-source { color: var(--muted); font-size: var(--fs-xs); }
+
+.tmdb-list { margin: 0; padding: 0; list-style: none; }
+.tmdb-row {
+  position: relative; display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: var(--s3);
+  padding: 7px 8px; border-radius: 10px;
+}
+.tmdb-row + .tmdb-row { margin-top: 2px; }
+.tmdb-row:hover { background: var(--panel-2); }
+.tmdb-row .thumb { width: 40px; border-radius: 6px; font-size: 1rem; }
+.tmdb-row.is-added { background: #6ee7a00f; box-shadow: inset 3px 0 0 var(--mint); }
+.tmdb-info { display: grid; min-width: 0; gap: 1px; }
+.tmdb-info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.92rem; }
+.tmdb-orig { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 0.76rem; }
+.tmdb-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 2px; color: var(--muted); font-size: 0.78rem; }
+
+/* Actions */
+.tmdb-add { min-width: 96px; }
+.tmdb-add.is-busy { opacity: 1; background: var(--raised); color: var(--text); }
+.tmdb-add.is-busy:disabled { cursor: progress; }
+.tmdb-see {
+  display: inline-flex; align-items: center; gap: 3px; border-radius: var(--r-sm);
+  color: var(--gold); font-size: 0.8rem; font-weight: 600; text-decoration: none; white-space: nowrap;
+}
+.tmdb-see:hover { text-decoration: underline; }
+.tmdb-done { display: grid; justify-items: end; gap: 2px; min-width: 0; }
+.tmdb-done-text { display: inline-flex; align-items: center; gap: 4px; color: var(--mint); font-size: 0.78rem; font-weight: 600; text-align: right; }
+.spin { animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.tmdb-note { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin: 0; padding: var(--s3); color: var(--muted); font-size: 0.88rem; }
+.tmdb-note > svg { flex: none; color: var(--gold); }
+.tmdb-note.is-error > svg { color: var(--rose); }
+.tmdb-note > span { flex: 1 1 200px; }
+
+.tmdb-sk-thumb { width: 40px; aspect-ratio: 2 / 3; border-radius: 6px; }
+.tmdb-sk-btn { width: 96px; height: 30px; border-radius: var(--r-pill); }
+.tmdb-sk-btn.wide { width: 100%; margin-top: var(--s2); }
+
+/* Phones: the action drops under the text so long titles keep their room. */
+@media (max-width: 419.98px) {
+  .tmdb-row { grid-template-columns: 40px minmax(0, 1fr); }
+  .tmdb-row > :last-child { grid-column: 2; justify-self: start; }
+  .tmdb-done { justify-items: start; }
+}
+
+/* /catalogo: empty search result → TMDB panel */
+.tmdb-panel {
+  padding: clamp(16px, 3vw, 28px); border: 1px dashed var(--line-strong); border-radius: var(--r-lg);
+  background: linear-gradient(180deg, var(--panel) 0%, transparent 100%);
+}
+.tmdb-panel-head { display: flex; align-items: flex-start; gap: var(--s3); margin-bottom: var(--s5); }
+.tmdb-panel-head > svg { flex: none; margin-top: 2px; color: var(--gold); }
+.tmdb-panel-head h2 { font-size: var(--fs-section); overflow-wrap: anywhere; }
+.tmdb-panel-head p { max-width: 60ch; margin: 6px 0 0; color: var(--muted); }
+.tmdb-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--s5) var(--s4);
+  margin: 0; padding: 0; list-style: none;
+}
+.tmdb-card { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.tmdb-card .art { margin-bottom: 4px; }
+.tmdb-card .art .poster { width: 100%; aspect-ratio: 2 / 3; border-radius: var(--radius); object-fit: cover; }
+.tmdb-card-title { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-size: var(--fs-card); line-height: 1.25; }
+.tmdb-card > :last-child { margin-top: auto; padding-top: var(--s2); }
+.tmdb-card .tmdb-add { width: 100%; }
+.tmdb-card .tmdb-done { justify-items: start; }
+.tmdb-card.is-added .art .poster { box-shadow: 0 0 0 2px var(--mint); }
+.tmdb-credit { margin: var(--s5) 0 0; color: var(--faint); font-size: var(--fs-xs); }
+.tmdb-filters-note { margin: var(--s3) 0 0; color: var(--muted); font-size: 0.88rem; }
+@media (max-width: 599.98px) { .tmdb-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4) var(--s3); } }

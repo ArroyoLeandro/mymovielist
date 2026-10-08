@@ -54,6 +54,11 @@ export default function TitleModal({ movie: m, r, me, onSave, onPending, studioN
                 {sectionName && <span className="tag">{sectionName}</span>}
                 {m.collection && <span className="tag">Saga: {m.collection.name}</span>}
               </p>
+              {m.addedBy && (
+                <p className="td-added">
+                  Agregada por <Link to={`/u/${m.addedBy}`} onClick={onClose}>@{m.addedBy}</Link>
+                </p>
+              )}
             </div>
           </header>
 

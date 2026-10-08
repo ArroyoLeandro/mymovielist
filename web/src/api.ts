@@ -19,6 +19,8 @@ export interface Movie {
   collection: { slug: string; name: string } | null
   providers: ProviderRef[]
   providersLink: string | null
+  /** Tag of the friend who added it by hand (search "¿No está? Agrégalo"); null for imported titles. */
+  addedBy?: string | null
 }
 /** Dynamic per-title data; only titles with at least one entry have a row. */
 export interface RatingRow {
@@ -76,6 +78,7 @@ export interface TitleSummary {
   section: { slug: string; name: string }
   providers: ProviderRef[]
   providersLink: string | null
+  addedBy?: string | null
 }
 /** Title plus the viewer's dynamic state (watched, score, pending, group ratings). */
 export interface StateTitle extends TitleSummary { state: RatingRow }
@@ -116,11 +119,64 @@ export interface Profile {
   myRecommendations?: { toTag: string; items: MyRecommendation[] }[]
 }
 
+/** TMDB search result for titles missing from the catalog. */
+export interface TmdbResult {
+  tmdbId: number
+  mediaType: 'movie' | 'series'
+  title: string
+  originalTitle: string | null
+  year: number | null
+  posterUrl: string | null
+  voteCount: number
+  released: boolean
+  inCatalog: { id: number; studioSlug: string } | null
+}
+export interface ImportResult { created: boolean; title: StateTitle; studio: { slug: string; name: string; kind: 'studio' | 'category' } }
+
+// ---- admin: catalog sync run step by step ----
+export type SyncMode = 'full' | 'import' | 'providers'
+export type StepStatus = 'pending' | 'partial' | 'done' | 'error'
+export interface SyncStep {
+  kind: 'import' | 'prune' | 'providers'
+  studio: string | null
+  label: string
+  status: StepStatus
+  summary: Record<string, number | string[]> | null
+  error: string | null
+  durationMs: number
+  calls: number
+  progress: { done: number; total: number } | null
+}
+export interface SyncTotals {
+  new: number; updated: number; deleted: number; providersUpdated: number; withProviders: number; failedSteps: number; unfinishedSteps: number
+}
+export interface SyncRun {
+  id: string
+  mode: SyncMode
+  by: string
+  startedAt: string
+  finishedAt: string | null
+  options: { limit: number; staleDays: number }
+  steps: SyncStep[]
+  totals: SyncTotals | null
+  cancelled: boolean
+  abandoned?: boolean
+}
+export interface StepResult extends SyncStep { index: number; log: string[] }
+export type AdminStatus =
+  | { unlocked: false }
+  | { unlocked: true; expiresIn: number; steps: Record<SyncMode, number>; running: SyncRun | null; lockExpiresIn: number | null; lastRun: SyncRun | null }
+
 export class ApiError extends Error {
   status: number
-  constructor(status: number, message: string) {
+  /** Machine-readable reason sent by the server (e.g. 'rate_limited', 'unreleased'). */
+  code: string | null
+  data: Record<string, unknown>
+  constructor(status: number, message: string, code: string | null = null, data: Record<string, unknown> = {}) {
     super(message)
     this.status = status
+    this.code = code
+    this.data = data
   }
 }
 
@@ -141,7 +197,8 @@ async function request<T>(method: string, path: string, body?: unknown, quiet401
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
     if (res.status === 401 && !quiet401) onUnauthorized()
-    throw new ApiError(res.status, errorText(res.status))
+    const d = data as Record<string, unknown>
+    throw new ApiError(res.status, errorText(res.status), typeof d.code === 'string' ? d.code : null, d)
   }
   return data as T
 }
@@ -176,4 +233,14 @@ export const api = {
   /** Recipient only: hide a received recommendation (true) or undo that (false). */
   dismissRecommendation: (id: number, dismissed: boolean) =>
     request<void>(dismissed ? 'POST' : 'DELETE', `/recommendations/${id}/dismiss`),
+  tmdbSearch: (q: string) => request<{ query: string; results: TmdbResult[] }>('GET', `/tmdb/search?q=${encodeURIComponent(q)}`),
+  importTitle: (tmdbId: number, mediaType: 'movie' | 'series') => request<ImportResult>('POST', '/titles/import', { tmdbId, mediaType }),
+  admin: {
+    status: () => request<AdminStatus>('GET', '/admin/status'),
+    // quiet401: a wrong admin password must not end the site session.
+    unlock: (password: string) => request<{ unlocked: true; expiresIn: number }>('POST', '/admin/unlock', { password }, true),
+    start: (mode: SyncMode, options: { limit?: number; staleDays?: number } = {}) => request<SyncRun>('POST', '/admin/sync/start', { mode, ...options }),
+    step: (runId: string, index: number) => request<StepResult>('POST', '/admin/sync/step', { runId, index }),
+    finish: (runId: string, cancelled = false) => request<SyncRun>('POST', '/admin/sync/finish', { runId, cancelled }),
+  },
 }

@@ -10,6 +10,7 @@ import { EmptyState, ErrorState } from '../components/States'
 import ProviderPicker, { type PickerOption } from '../components/ProviderPicker'
 import { ProviderLogo } from '../components/Providers'
 import StickyBar from '../components/StickyBar'
+import { TmdbPanel } from '../components/TmdbResults'
 import { parseIds, parsePType, PTYPES, type PType } from '../lib/providers'
 import { useProviders, useStudios } from '../queries'
 
@@ -153,6 +154,16 @@ export default function Browse() {
           <ErrorState error={list.error} onRetry={() => void list.refetch()} />
         ) : !list.data ? (
           <GridSkeleton cards={12} />
+        ) : items.length === 0 && filters.q && (filters.q.trim().length >= 2) ? (
+          <>
+            <TmdbPanel q={filters.q.trim()} />
+            {KEYS.some((k) => k !== 'q' && params.has(k)) && (
+              <p className="tmdb-filters-note">
+                También hay otros filtros activos.{' '}
+                <button type="button" className="btn btn-quiet btn-sm" onClick={() => setParams(new URLSearchParams({ q: filters.q ?? '' }), { replace: true })}>Buscar sin filtros</button>
+              </p>
+            )}
+          </>
         ) : items.length === 0 ? (
           <EmptyState
             icon={SearchX}

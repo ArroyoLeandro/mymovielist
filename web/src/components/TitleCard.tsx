@@ -11,6 +11,7 @@ export type SaveFn = (movieId: number, watched: boolean, score: number | null) =
 export type PendingFn = (movieId: number, pending: boolean) => Promise<boolean>
 export type CardMovie = Pick<TitleSummary, 'id' | 'title' | 'originalTitle' | 'year' | 'posterUrl' | 'mediaType'> & {
   collection?: { slug: string; name: string } | null
+  addedBy?: string | null
 } & Partial<Availability>
 
 /**

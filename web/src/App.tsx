@@ -9,6 +9,7 @@ import Browse from './pages/Browse'
 import Catalog from './pages/Catalog'
 import Ranking from './pages/Ranking'
 import Profile from './pages/Profile'
+import { Toaster } from './lib/toast'
 import { AppSkeleton } from './components/Skeleton'
 import SearchBox from './components/SearchBox'
 import { BackButton, ScrollManager, ToTopButton } from './components/Scroll'
@@ -73,6 +74,7 @@ export default function App() {
         </Routes>
       </main>
       <ToTopButton />
+      <Toaster />
     </>
   )
 }

@@ -228,8 +228,9 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
   .search { width: auto; }
   .search-field { display: none; }
   .search-toggle { display: inline-flex; }
+  /* Absolute grid child: auto area + stretch, or it keeps the search cell's end alignment and shrinks to fit. */
   .search.expanded {
-    position: absolute; top: 6px; left: var(--gutter); right: var(--gutter); z-index: 3;
+    grid-area: auto; justify-self: stretch; position: absolute; top: 6px; left: var(--gutter); right: var(--gutter); z-index: 3;
     display: flex; align-items: center; gap: var(--s2); background: var(--night); border-radius: var(--r-pill);
   }
   .search.expanded .search-field { display: block; flex: 1; min-width: 0; }
@@ -668,6 +669,25 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
 }
 .to-top.show { visibility: visible; opacity: 1; transform: none; transition-delay: 0s; }
 .to-top:hover { border-color: var(--gold); }
+
+/* App-wide toasts (lib/toast.tsx): bottom center, above the back-to-top button. */
+.toasts {
+  position: fixed; left: 50%; bottom: calc(var(--s4) + env(safe-area-inset-bottom)); translate: -50% 0; z-index: 60;
+  display: grid; justify-items: center; gap: var(--s2); width: max-content; max-width: calc(100vw - 32px); pointer-events: none;
+}
+.toast {
+  display: flex; align-items: center; gap: var(--s2); max-width: 100%; padding: 6px 6px 6px 14px; pointer-events: auto;
+  border: 1px solid var(--line-strong); border-radius: var(--r-pill); background: var(--panel-2); box-shadow: var(--shadow-dialog);
+  font-size: 0.88rem; animation: pop 0.18s var(--ease);
+}
+.toast > svg { flex: none; }
+.toast.ok > svg { color: var(--mint); }
+.toast.error { border-color: #ff6b9d66; }
+.toast.error > svg { color: var(--rose); }
+.toast > span { min-width: 0; overflow-wrap: anywhere; }
+.toast-link { flex: none; padding: 4px 10px; border-radius: var(--r-pill); background: var(--gold); color: var(--gold-ink); font-weight: 700; text-decoration: none; }
+.toast-link:hover { background: var(--gold-hover); }
+.toast-x { width: 30px; height: 30px; }
 
 /* ---------- 18. Motion ---------- */
 @media (prefers-reduced-motion: reduce) {

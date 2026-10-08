@@ -35,5 +35,10 @@ export const useProfile = (tag: string) => useQuery({ queryKey: ['profile', tag]
 export const useSearch = (q: string) =>
   useQuery({ queryKey: ['search', q], queryFn: () => api.search(q), enabled: q.length >= 2, staleTime: 15000, placeholderData: (prev) => prev })
 
+// TMDB search for titles missing from the catalog: results change slowly, but inCatalog flips after an import
+// (the add hook invalidates ['tmdb']). No retry: a 429 must not be repeated.
+export const useTmdbSearch = (q: string, enabled = true) =>
+  useQuery({ queryKey: ['tmdb', q], queryFn: () => api.tmdbSearch(q), enabled: enabled && q.length >= 2, staleTime: 10 * 60 * 1000, retry: false })
+
 /** Queries holding per-user title state; invalidated after any mutation. */
 export const DYNAMIC_KEYS = ['home', 'titles', 'search', 'profile', 'progress', 'ratings', 'highlights', 'ranking'] as const
