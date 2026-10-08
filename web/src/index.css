@@ -139,17 +139,6 @@ input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px #d
 @media (hover: hover) { .check:hover[data-tip]::after { opacity: 1; visibility: visible; } }
 .check.on { background: var(--gold); color: var(--gold-ink); border-color: var(--gold); font-weight: 800; }
 
-.score-read { display: flex; align-items: baseline; gap: 8px; margin: 4px 0 2px; min-height: 1.9rem; }
-.score-read strong { font-family: var(--display); font-size: 1.6rem; line-height: 1; color: var(--gold); min-width: 1.4ch; }
-.score-read span { font-size: 0.78rem; color: var(--muted); }
-.scores { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-top: 2px; }
-.scores button {
-  min-height: 28px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; font-size: 0.8rem; color: var(--muted);
-  transition: background 0.12s, transform 0.12s, border-color 0.12s;
-}
-.scores button.fill { background: var(--panel-2); border-color: var(--gold); color: var(--text); }
-.scores button.on { background: var(--gold); color: var(--gold-ink); border-color: var(--gold); font-weight: 700; animation: pop 0.2s ease-out; }
-.scores button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .error.small { margin: 4px 0 0; font-size: 0.75rem; }
 @keyframes pop { 50% { transform: scale(1.15); } }
 .community { margin: 2px 0 0; font-size: 0.78rem; color: var(--muted); display: flex; justify-content: space-between; }
@@ -310,7 +299,6 @@ input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px #d
 
 @media (prefers-reduced-motion: reduce) {
   .sk { animation: none; }
-  .scores button.on { animation: none; }
 }
 
 /* ---------- sections: sticky chips, collapsible headers ---------- */

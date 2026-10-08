@@ -1,16 +1,26 @@
-/* ---------- card: title/summary buttons, poster open area ---------- */
-.art-open { position: absolute; inset: 0; background: none; border: 0; padding: 0; border-radius: var(--radius); cursor: pointer; }
-.my-score {
-  position: absolute; right: 8px; top: 8px; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 700;
-  background: var(--gold); color: var(--gold-ink);
+/* ---------- card: text-style openers, poster open area ---------- */
+.card .art-open { position: absolute; inset: 0; width: 100%; height: 100%; background: none; border: 0; padding: 0; border-radius: var(--radius); cursor: pointer; }
+.card .my-score {
+  position: absolute; left: 6px; bottom: 6px; padding: 1px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 800; line-height: 1.4;
+  background: var(--gold); color: var(--gold-ink); pointer-events: none;
 }
-.title-open { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
-.title-open:hover { text-decoration: underline; }
-.title-open:focus-visible, .summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 4px; }
-.summary { background: none; border: 0; padding: 0; text-align: left; font-size: 0.78rem; color: var(--muted); cursor: pointer; line-height: 1.35; }
-.summary b { color: var(--gold); font-weight: 600; }
-.summary .more { color: var(--text); white-space: nowrap; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
-.summary:hover .more { text-decoration-color: var(--gold); }
+.card .title-open, .card .summary {
+  background: none; border: 0; padding: 0; margin: 0; width: auto; max-width: 100%; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.card .title-open {
+  display: block; font-family: var(--display); font-weight: 700; font-size: 0.98rem; line-height: 1.2; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.card .title-open:hover { color: var(--gold); text-decoration: underline; }
+.card .title-open:focus-visible, .card .summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 4px; }
+.card .year { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card .summary { display: grid; gap: 1px; justify-items: start; line-height: 1.3; }
+.card .sum-stats { font-size: 0.78rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.card .summary b { color: var(--text); font-weight: 600; }
+.card .summary .more { display: inline-flex; align-items: center; gap: 2px; font-size: 0.76rem; font-weight: 600; color: var(--gold); white-space: nowrap; }
+.card .summary:hover .more { text-decoration: underline; }
+.card.seen .art { box-shadow: 0 0 0 1px #d4f52655; }
+main .card.seen .art, .page .card.seen .art { box-shadow: 0 0 0 1px #d4f52655; }
 
 /* ---------- title detail modal ---------- */
 .td-back { position: fixed; inset: 0; z-index: 40; background: #05041199; backdrop-filter: blur(4px); display: grid; place-items: center; padding: 16px; animation: td-fade 0.15s ease-out; }
@@ -45,8 +55,6 @@
 .td-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 14px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--line); color: var(--text); font-size: 0.85rem; }
 .td-btn:hover { border-color: var(--muted); }
 .td-btn.on { background: var(--gold); border-color: var(--gold); color: var(--gold-ink); font-weight: 600; }
-.td-scores { grid-template-columns: repeat(10, 1fr); }
-.td-scores button { min-height: 38px; }
 .td-people { padding: 16px 24px 24px; border-top: 1px solid var(--line); }
 .td-people h3 { font-size: 1rem; margin-bottom: 10px; }
 .td-people ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
@@ -69,9 +77,33 @@
   .td-stats { grid-template-columns: auto 1fr; padding: 4px 16px 16px; }
   .td-dist { grid-column: 1 / -1; }
   .td-mine, .td-people { padding-left: 16px; padding-right: 16px; }
-  .td-scores { grid-template-columns: repeat(5, 1fr); }
   .td-people { padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
 }
 @media (prefers-reduced-motion: reduce) {
   .td-back, .td { animation: none; }
+}
+
+/* ---------- score meter ---------- */
+.meter-wrap { display: grid; gap: 8px; margin-top: 6px; }
+.meter-wrap.disabled { opacity: 0.6; }
+.meter-read { display: flex; align-items: baseline; gap: 10px; margin: 0; min-height: 3rem; }
+.meter-read strong { font-family: var(--display); font-size: 2.6rem; line-height: 1; font-weight: 800; color: var(--gold); min-width: 1.3ch; }
+.meter-read strong.none { color: var(--line); }
+.meter-read strong.pop { animation: pop 0.22s ease-out; }
+.meter-read span { font-size: 1.05rem; font-weight: 500; }
+.score-meter { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; touch-action: pan-y; user-select: none; -webkit-user-select: none; cursor: pointer; border-radius: 10px; }
+.score-meter:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; }
+.score-meter i {
+  --c: color-mix(in srgb, var(--rose), var(--gold) var(--p));
+  display: grid; place-items: center; height: 40px; border-radius: 6px; font-style: normal; font-size: 0.78rem; font-weight: 600;
+  background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); transition: background 0.1s, color 0.1s, transform 0.1s;
+}
+.score-meter i.fill { background: var(--c); border-color: var(--c); color: var(--gold-ink); }
+.score-meter i.peak { transform: translateY(-3px) scale(1.06); font-weight: 800; box-shadow: 0 6px 16px color-mix(in srgb, var(--c) 45%, transparent); }
+.meter-hint { margin: 0; font-size: 0.76rem; color: var(--muted); }
+@media (max-width: 400px) { .score-meter { gap: 2px; } .score-meter i { height: 36px; border-radius: 5px; font-size: 0.72rem; } }
+@media (prefers-reduced-motion: reduce) {
+  .meter-read strong.pop { animation: none; }
+  .score-meter i { transition: none; }
+  .score-meter i.peak { transform: none; }
 }

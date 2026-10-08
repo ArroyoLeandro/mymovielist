@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { Bookmark, BookmarkCheck, Check, Plus, Send, Users, X } from 'lucide-react'
 import type { RatingRow } from '../api'
 import { useTitleActions } from '../lib/useTitleActions'
+import { scoreTier as tier } from '../lib/scores'
 import Poster from './Poster'
+import ScoreMeter from './ScoreMeter'
 import type { CardMovie, PendingFn, SaveFn } from './TitleCard'
 
-const SCORE_LABELS = ['Horrible', 'Malo', 'Flojo', 'Regular', 'Pasable', 'Decente', 'Bueno', 'Muy bueno', 'Excelente', 'Obra maestra']
-const tier = (s: number | null) => (s === null ? '' : s <= 4 ? 'low' : s <= 7 ? 'mid' : 'high')
 const FOCUSABLE = 'a[href], button:not(:disabled):not([tabindex="-1"]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
 
 /** Title detail: group stats, every viewer's score, and the user's own controls. */
@@ -17,9 +17,7 @@ export default function TitleModal({ movie: m, r, me, onSave, onPending, studioN
   studioName?: string; sectionName?: string; paused: boolean; onRecommend: () => void; onClose: () => void
 }) {
   const { watched, pending, score, failed, toggleWatched, wish, setScore } = useTitleActions(m.id, r, onSave, onPending)
-  const [hover, setHover] = useState<number | null>(null)
   const dialog = useRef<HTMLDivElement>(null)
-  const group = useRef<HTMLDivElement>(null)
   const opener = useRef<HTMLElement | null>(null)
   const pausedRef = useRef(paused)
   const closeRef = useRef(onClose)
@@ -78,18 +76,6 @@ export default function TitleModal({ movie: m, r, me, onSave, onPending, studioN
   }, [ratings])
   const maxDist = Math.max(1, ...dist)
   const scored = dist.reduce((a, b) => a + b, 0)
-
-  const shown = hover ?? score
-  const rate = (n: number) => setScore(score === n ? null : n)
-  const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (/^[0-9]$/.test(e.key)) return void rate(e.key === '0' ? 10 : Number(e.key))
-    const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0
-    if (!step) return
-    e.preventDefault()
-    const btns = Array.from(group.current?.querySelectorAll('button') ?? [])
-    const i = btns.indexOf(document.activeElement as HTMLButtonElement)
-    btns[Math.min(9, Math.max(0, i + step))]?.focus()
-  }
 
   const bg = m.posterUrl ? ({ '--td-bg': `url(${JSON.stringify(m.posterUrl)})` } as CSSProperties) : undefined
   const count = r?.watchersCount ?? 0
@@ -152,26 +138,7 @@ export default function TitleModal({ movie: m, r, me, onSave, onPending, studioN
                 <Send size={16} aria-hidden="true" /> Recomendar
               </button>
             </div>
-            <p className="score-read" aria-live="polite">
-              <strong>{shown ?? '–'}</strong>
-              <span>{shown ? SCORE_LABELS[shown - 1] : watched ? 'Sin puntaje' : 'Toca un número para puntuar'}</span>
-            </p>
-            <div className="scores td-scores" role="group" aria-label="Tu puntaje" ref={group} onKeyDown={onKey} onMouseLeave={() => setHover(null)}>
-              {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                <button
-                  key={n}
-                  className={`${score === n ? 'on' : ''} ${shown !== null && n <= shown ? 'fill' : ''}`}
-                  aria-pressed={score === n}
-                  aria-label={`Puntuar ${n} de 10: ${SCORE_LABELS[n - 1]}`}
-                  onMouseEnter={() => setHover(n)}
-                  onFocus={() => setHover(n)}
-                  onBlur={() => setHover(null)}
-                  onClick={() => void rate(n)}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
+            <ScoreMeter value={score} onChange={(n) => void setScore(n)} />
             {failed && <p className="error small" role="alert">No se pudo guardar. Inténtalo de nuevo.</p>}
           </section>
 

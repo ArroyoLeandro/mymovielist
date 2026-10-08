@@ -1,5 +1,5 @@
 import { memo, useState } from 'react'
-import { Plus, Check, Bookmark, BookmarkCheck, Send } from 'lucide-react'
+import { Plus, Check, Bookmark, BookmarkCheck, Send, ChevronRight } from 'lucide-react'
 import type { RatingRow, TitleSummary } from '../api'
 import { useTitleActions } from '../lib/useTitleActions'
 import Poster from './Poster'
@@ -66,17 +66,14 @@ const TitleCard = memo(function TitleCard({ movie: m, r, me, onSave, onPending, 
         </div>
       </div>
       <h3><button type="button" className="title-open" aria-haspopup="dialog" onClick={() => setDetail(true)}>{m.title}</button></h3>
-      <p className="year">{m.year}{m.originalTitle ? ` · ${m.originalTitle}` : ''}</p>
-      {label && <p className="card-label"><span className="tag studio">{label}</span></p>}
+      <p className="year">{m.year}{label ? ` · ${label}` : ''}</p>
       <button type="button" className="summary" aria-haspopup="dialog" onClick={() => setDetail(true)}>
-        {watchersCount === 0 ? (
-          <span>Nadie la vio todavía</span>
-        ) : (
-          <span>
-            {r?.averageScore != null && <b>★ {r.averageScore.toFixed(1)} · </b>}vista por {watchersCount}
-          </span>
-        )}{' '}
-        <span className="more">{watchersCount === 0 ? 'Puntuar' : 'Ver puntuaciones'}</span>
+        <span className="sum-stats">
+          {watchersCount === 0 ? 'Nadie la vio todavía' : (
+            <>{r?.averageScore != null && <b>★ {r.averageScore.toFixed(1)} · </b>}{watchersCount === 1 ? '1 la vio' : `${watchersCount} la vieron`}</>
+          )}
+        </span>
+        <span className="more">{watchersCount === 0 ? 'Puntuar' : 'Ver puntuaciones'}<ChevronRight size={12} aria-hidden="true" /></span>
       </button>
       {failed && <p className="error small">No se pudo guardar. Inténtalo de nuevo.</p>}
       {detail && (
