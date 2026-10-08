@@ -16,6 +16,7 @@ export interface RatingRow {
   movieId: number
   watched: boolean
   score: number | null
+  pending: boolean
   ratings: Rating[]
   watchersCount: number
   averageScore: number | null
@@ -47,17 +48,35 @@ export interface Highlights {
   favorite: { movie: HlMovie; average: number; votes: number } | null
   soulmates: { a: string; b: string; common: number; match: number } | null
 }
+/** Title as returned by the global endpoints (home, titles, search, profile). */
+export interface TitleSummary {
+  id: number
+  title: string
+  originalTitle: string | null
+  year: number
+  posterUrl: string | null
+  mediaType: 'movie' | 'series'
+  tmdbId: number | null
+  studio: { slug: string; name: string; kind: 'studio' | 'category' }
+  section: { slug: string; name: string }
+}
+/** Title plus the viewer's dynamic state (watched, score, pending, group ratings). */
+export interface StateTitle extends TitleSummary { state: RatingRow }
+export interface HomeSaga { slug: string; name: string; posterUrl: string | null; total: number; seen: number; studioSlug: string }
+export type HomeRow =
+  | { key: string; title: string; link: string | null; kind: 'titles'; items: StateTitle[] }
+  | { key: string; title: string; link: string | null; kind: 'sagas'; items: HomeSaga[] }
+export interface TitlesPage { items: StateTitle[]; total: number; page: number; hasMore: boolean }
+export interface TitleFilters { type?: string; studio?: string; decade?: string; status?: string; sort?: string; q?: string }
+
 export interface ListEntry {
-  movie: {
-    id: number; title: string; originalTitle: string | null; year: number; posterUrl: string | null
-    mediaType: 'movie' | 'series'
-    studio: { slug: string; name: string }
-    section: { slug: string; name: string }
-  }
+  movie: TitleSummary
   score: number | null
   watchedAt: string
 }
-export interface UserList {
+export interface Recommended { id: number; movie: TitleSummary; from: string; note: string | null; createdAt: string; watched: boolean; pending: boolean }
+export interface MyRecommendation { id: number; movie: TitleSummary; note: string | null; createdAt: string; watched: boolean; score: number | null }
+export interface Profile {
   user: { tag: string }
   stats: {
     watchedCount: number
@@ -66,7 +85,11 @@ export interface UserList {
     scoreDistribution: Record<string, number>
     byStudio: { slug: string; name: string; logoUrl: string | null; watched: number; total: number; avgScore: number | null }[]
   }
-  entries: ListEntry[]
+  watched: ListEntry[]
+  pending: (TitleSummary & { addedAt: string })[]
+  /** Only present on the logged-in user's own profile. */
+  recommendedToMe?: Recommended[]
+  myRecommendations?: { toTag: string; items: MyRecommendation[] }[]
 }
 
 export class ApiError extends Error {
@@ -111,5 +134,18 @@ export const api = {
     request<Entry>('PUT', `/movies/${id}/entry`, { watched, score }),
   ranking: (studio?: string) => request<RankingRow[]>('GET', studio ? `/ranking?studio=${encodeURIComponent(studio)}` : '/ranking'),
   highlights: () => request<Highlights>('GET', '/highlights'),
-  userList: (tag: string) => request<UserList>('GET', `/users/${encodeURIComponent(tag)}/list`),
+  profile: (tag: string) => request<Profile>('GET', `/users/${encodeURIComponent(tag)}/profile`),
+  users: () => request<string[]>('GET', '/users'),
+  home: () => request<{ rows: HomeRow[] }>('GET', '/home'),
+  titles: (f: TitleFilters, page: number) => {
+    const p = new URLSearchParams()
+    Object.entries(f).forEach(([k, v]) => v && p.set(k, v))
+    p.set('page', String(page))
+    return request<TitlesPage>('GET', `/titles?${p}`)
+  },
+  search: (q: string) => request<StateTitle[]>('GET', `/search?q=${encodeURIComponent(q)}`),
+  setPending: (id: number, pending: boolean) => request<void>(pending ? 'PUT' : 'DELETE', `/movies/${id}/watchlist`),
+  recommend: (id: number, toTags: string[], note: string) =>
+    request<{ sentTo: string[] }>('POST', `/movies/${id}/recommendations`, { toTags, note: note.trim() || null }),
+  deleteRecommendation: (id: number) => request<void>('DELETE', `/recommendations/${id}`),
 }

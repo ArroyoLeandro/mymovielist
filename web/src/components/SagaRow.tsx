@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 
-/** One saga: header plus a horizontal snap scroller (hidden scrollbar, desktop arrows, wheel-to-horizontal). */
-export default function SagaRow({ name, count, seen, children }: { name: string; count: number; seen: number; children: ReactNode }) {
+/** One horizontal row (a saga, or a themed home row): header plus a horizontal snap scroller (hidden scrollbar, desktop arrows, wheel-to-horizontal). */
+export default function SagaRow({ id, name, count, seen, action, children }: {
+  id?: string; name: string; count?: number; seen?: number; action?: ReactNode; children: ReactNode
+}) {
   const row = useRef<HTMLDivElement>(null)
   const [edges, setEdges] = useState({ left: false, right: false })
 
@@ -33,14 +35,18 @@ export default function SagaRow({ name, count, seen, children }: { name: string;
       ro.disconnect()
       el.removeEventListener('wheel', onWheel)
     }
-  }, [measure, count])
+  }, [measure])
+
+  useEffect(measure) // children (and so the scroll width) can change on any render
 
   const scrollBy = (dir: 1 | -1) => row.current?.scrollBy({ left: dir * row.current.clientWidth * 0.8, behavior: 'smooth' })
 
   return (
-    <section className="saga">
+    <section className="saga" id={id}>
       <h2>
-        {name} <span>({count}) &middot; {seen}/{count} vistas</span>
+        {name}
+        {count !== undefined && <span>({count}) &middot; {seen ?? 0}/{count} vistas</span>}
+        {action && <span className="row-action">{action}</span>}
       </h2>
       <div className="saga-wrap" data-left={edges.left} data-right={edges.right}>
         <button type="button" className="chips-arrow left" onClick={() => scrollBy(-1)} aria-label="Anteriores" tabIndex={-1} />

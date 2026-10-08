@@ -1,45 +1,30 @@
-import { memo, useCallback, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { useParams } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, type Movie, type RatingRow } from '../api'
 import { useAuth } from '../auth'
-import Poster from '../components/Poster'
 import SagaRow from '../components/SagaRow'
 import SectionNav from '../components/SectionNav'
 import { CatalogSkeleton } from '../components/Skeleton'
+import TitleCard, { type PendingFn, type SaveFn } from '../components/TitleCard'
+import { blankRow, isEmptyRow, patchEntry, upsertRow } from '../lib/ratings'
 import { useCatalog } from '../queries'
 
 type Filter = 'all' | 'watched' | 'unwatched'
 type Tab = 'sagas' | 'movies' | 'series'
-type SaveFn = (movieId: number, watched: boolean, score: number | null) => Promise<boolean>
 
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
 // ---- optimistic patching of the ratings cache ----
-const byScore = (a: { tag: string; score: number | null }, b: { tag: string; score: number | null }) =>
-  (b.score ?? -1) - (a.score ?? -1) || a.tag.localeCompare(b.tag)
+const rowOf = (rows: RatingRow[], movieId: number) => rows.find((r) => r.movieId === movieId) ?? blankRow(movieId)
 
-function applyEntry(rows: RatingRow[], movieId: number, tag: string, watched: boolean, score: number | null): RatingRow[] {
-  const i = rows.findIndex((r) => r.movieId === movieId)
-  const row: RatingRow = i >= 0 ? rows[i] : { movieId, watched: false, score: null, ratings: [], watchersCount: 0, averageScore: null }
-  const others = row.ratings.filter((r) => r.tag !== tag)
-  const ratings = watched ? [...others, { tag, score }].sort(byScore) : others
-  if (ratings.length === 0) return rows.filter((r) => r.movieId !== movieId)
-  const scored = ratings.filter((r) => r.score !== null) as { score: number }[]
-  const next: RatingRow = {
-    ...row,
-    watched,
-    score: watched ? score : null,
-    ratings,
-    watchersCount: ratings.length,
-    averageScore: scored.length ? Math.round((scored.reduce((a, r) => a + r.score, 0) / scored.length) * 100) / 100 : null,
-  }
-  return i >= 0 ? rows.map((r) => (r.movieId === movieId ? next : r)) : [...rows, next]
+function patchRows(rows: RatingRow[], movieId: number, tag: string, watched: boolean, score: number | null): RatingRow[] {
+  return upsertRow(rows, patchEntry(rowOf(rows, movieId), tag, watched, score))
 }
 
 function restoreRow(rows: RatingRow[], movieId: number, prev: RatingRow | undefined): RatingRow[] {
   const rest = rows.filter((r) => r.movieId !== movieId)
-  return prev ? [...rest, prev] : rest
+  return prev && !isEmptyRow(prev) ? [...rest, prev] : rest
 }
 
 export default function Catalog() {
@@ -72,7 +57,7 @@ function CatalogView({ slug }: { slug: string }) {
     onMutate: async (v) => {
       await qc.cancelQueries({ queryKey: ratingsKey }) // drop any poll that started before this edit
       const prev = qc.getQueryData<RatingRow[]>(ratingsKey)?.find((r) => r.movieId === v.movieId)
-      qc.setQueryData<RatingRow[]>(ratingsKey, (rows) => applyEntry(rows ?? [], v.movieId, me, v.watched, v.score))
+      qc.setQueryData<RatingRow[]>(ratingsKey, (rows) => patchRows(rows ?? [], v.movieId, me, v.watched, v.score))
       return { prev }
     },
     onError: (_e, v, ctx) => {
@@ -81,14 +66,14 @@ function CatalogView({ slug }: { slug: string }) {
     onSuccess: (entry, v) => {
       // Server is the source of truth, unless a newer save is still in flight.
       if (qc.isMutating({ mutationKey: entryKey }) <= 1) {
-        qc.setQueryData<RatingRow[]>(ratingsKey, (rows) => applyEntry(rows ?? [], v.movieId, me, entry.watched, entry.score))
+        qc.setQueryData<RatingRow[]>(ratingsKey, (rows) => patchRows(rows ?? [], v.movieId, me, entry.watched, entry.score))
       }
     },
     onSettled: () => {
       // Once every in-flight save is done, refresh community stats and the home progress.
       if (qc.isMutating({ mutationKey: entryKey }) <= 1) {
         void qc.invalidateQueries({ queryKey: ratingsKey })
-        void qc.invalidateQueries({ queryKey: ['progress'] })
+        for (const k of ['progress', 'home', 'titles', 'profile']) void qc.invalidateQueries({ queryKey: [k] })
       }
     },
   })
@@ -96,6 +81,28 @@ function CatalogView({ slug }: { slug: string }) {
   const onSave = useCallback<SaveFn>(
     (movieId, watched, score) => mutateAsync({ movieId, watched, score }).then(() => true, () => false),
     [mutateAsync],
+  )
+
+  const pend = useMutation({
+    mutationFn: (v: { movieId: number; pending: boolean }) => api.setPending(v.movieId, v.pending),
+    onMutate: async (v) => {
+      await qc.cancelQueries({ queryKey: ratingsKey })
+      const prev = qc.getQueryData<RatingRow[]>(ratingsKey)?.find((r) => r.movieId === v.movieId)
+      qc.setQueryData<RatingRow[]>(ratingsKey, (rows) => upsertRow(rows ?? [], { ...rowOf(rows ?? [], v.movieId), pending: v.pending }))
+      return { prev }
+    },
+    onError: (_e, v, ctx) => {
+      qc.setQueryData<RatingRow[]>(ratingsKey, (rows) => restoreRow(rows ?? [], v.movieId, ctx?.prev))
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ratingsKey })
+      for (const k of ['home', 'titles', 'profile']) void qc.invalidateQueries({ queryKey: [k] })
+    },
+  })
+  const { mutateAsync: mutatePending } = pend
+  const onPending = useCallback<PendingFn>(
+    (movieId, pending) => mutatePending({ movieId, pending }).then(() => true, () => false),
+    [mutatePending],
   )
 
   const [query, setQuery] = useState('')
@@ -117,6 +124,39 @@ function CatalogView({ slug }: { slug: string }) {
     [sections, inSaga],
   )
   const series = useMemo(() => all.filter((m) => m.mediaType === 'series'), [all])
+
+  // Deep links from search / home: /studio/:slug?t=<title id> or ?saga=<saga slug> switch to the right tab,
+  // scroll the card into view and flash it.
+  const [params] = useSearchParams()
+  const jumpT = params.get('t')
+  const jumpSaga = params.get('saga')
+  const jumpKey = jumpT ? `t${jumpT}` : jumpSaga ? `s${jumpSaga}` : ''
+  const handled = useRef('')
+  const ready = !!(catalog.data && ratings.data)
+  const needTab = useMemo<Tab | null>(() => {
+    if (jumpT) {
+      const m = titleById.get(Number(jumpT))
+      return !m ? null : m.mediaType === 'series' ? 'series' : inSaga.has(m.id) ? 'sagas' : 'movies'
+    }
+    return jumpSaga ? 'sagas' : null
+  }, [jumpT, jumpSaga, titleById, inSaga])
+  useEffect(() => {
+    if (!ready || !jumpKey || handled.current === jumpKey || !needTab) return
+    if (tabPick !== needTab) {
+      setTabPick(needTab)
+      setQuery('')
+      setFilter('all')
+      return
+    }
+    handled.current = jumpKey
+    setTimeout(() => {
+      const el = document.getElementById(jumpT ? `t-${jumpT}` : `saga-${jumpSaga}`)
+      if (!el) return
+      el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
+      el.classList.add('flash')
+      setTimeout(() => el.classList.remove('flash'), 2400)
+    }, 80)
+  }, [ready, jumpKey, jumpT, jumpSaga, needTab, tabPick])
 
   if ((catalog.error && !catalog.data) || (ratings.error && !ratings.data)) {
     return <p className="error">{(catalog.error ?? ratings.error)?.message}</p>
@@ -190,8 +230,8 @@ function CatalogView({ slug }: { slug: string }) {
       </div>
 
       {tab === 'sagas' && shownSagas.map(({ sg, movies, visibleMovies }) => (
-        <SagaRow key={sg.slug} name={sg.name} count={movies.length} seen={movies.filter((m) => byId.get(m.id)?.watched).length}>
-          {visibleMovies.map((m) => <Card key={m.id} movie={m} r={byId.get(m.id)} me={me} onSave={onSave} />)}
+        <SagaRow key={sg.slug} id={`saga-${sg.slug}`} name={sg.name} count={movies.length} seen={movies.filter((m) => byId.get(m.id)?.watched).length}>
+          {visibleMovies.map((m) => <TitleCard key={m.id} movie={m} r={byId.get(m.id)} me={me} onSave={onSave} onPending={onPending} />)}
         </SagaRow>
       ))}
 
@@ -220,7 +260,7 @@ function CatalogView({ slug }: { slug: string }) {
                 </h2>
                 {open && (
                   <div className="grid era-body">
-                    {movies.map((m) => <Card key={m.id} movie={m} r={byId.get(m.id)} me={me} onSave={onSave} />)}
+                    {movies.map((m) => <TitleCard key={m.id} movie={m} r={byId.get(m.id)} me={me} onSave={onSave} onPending={onPending} />)}
                   </div>
                 )}
               </section>
@@ -231,7 +271,7 @@ function CatalogView({ slug }: { slug: string }) {
 
       {tab === 'series' && (
         <div className="grid era era-body">
-          {shownSeries.map((m) => <Card key={m.id} movie={m} r={byId.get(m.id)} me={me} onSave={onSave} />)}
+          {shownSeries.map((m) => <TitleCard key={m.id} movie={m} r={byId.get(m.id)} me={me} onSave={onSave} onPending={onPending} />)}
         </div>
       )}
 
@@ -239,87 +279,3 @@ function CatalogView({ slug }: { slug: string }) {
     </>
   )
 }
-
-const LABELS = ['Horrible', 'Malo', 'Flojo', 'Regular', 'Pasable', 'Decente', 'Bueno', 'Muy bueno', 'Excelente', 'Obra maestra']
-const tier = (s: number | null) => (s === null ? '' : s <= 4 ? 'low' : s <= 7 ? 'mid' : 'high')
-
-const Card = memo(function Card({ movie: m, r, me, onSave }: { movie: Movie; r: RatingRow | undefined; me: string; onSave: SaveFn }) {
-  const watched = r?.watched ?? false
-  const score = r?.score ?? null
-  const ratings = r?.ratings ?? []
-  const watchersCount = r?.watchersCount ?? 0
-  const [hover, setHover] = useState<number | null>(null)
-  const [failed, setFailed] = useState(false)
-  const group = useRef<HTMLDivElement>(null)
-
-  const rate = async (n: number) => {
-    setHover(null)
-    setFailed(false)
-    if (!(await onSave(m.id, true, score === n ? null : n))) {
-      setFailed(true)
-      setTimeout(() => setFailed(false), 3000)
-    }
-  }
-  const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (/^[0-9]$/.test(e.key)) return void rate(e.key === '0' ? 10 : Number(e.key))
-    const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0
-    if (!step) return
-    e.preventDefault()
-    const btns = Array.from(group.current?.querySelectorAll('button') ?? [])
-    const i = btns.indexOf(document.activeElement as HTMLButtonElement)
-    btns[Math.min(9, Math.max(0, i + step))]?.focus()
-  }
-  const shown = hover ?? score
-  return (
-    <article className={`card ${watched ? 'seen' : ''}`}>
-      <div className="art">
-        <Poster url={m.posterUrl} title={m.title} />
-        {m.mediaType === 'series' && <span className="badge">Serie</span>}
-        <button
-          className={`check ${watched ? 'on' : ''}`}
-          aria-pressed={watched}
-          aria-label={watched ? `Quitar ${m.title} de las vistas` : `Marcar ${m.title} como vista`}
-          onClick={() => void onSave(m.id, !watched, null)}
-        >
-          {watched ? '✓' : '+'}
-        </button>
-      </div>
-      <h3>{m.title}</h3>
-      <p className="year">{m.year}{m.originalTitle ? ` · ${m.originalTitle}` : ''}</p>
-      <p className="score-read" aria-live="polite">
-        <strong>{shown ?? '–'}</strong>
-        <span>{shown ? LABELS[shown - 1] : watched ? 'Sin puntaje' : 'Toca para puntuar'}</span>
-      </p>
-      <div className="scores" role="group" aria-label="Tu puntaje" ref={group} onKeyDown={onKey} onMouseLeave={() => setHover(null)}>
-        {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-          <button
-            key={n}
-            className={`${score === n ? 'on' : ''} ${shown !== null && n <= shown ? 'fill' : ''}`}
-            aria-pressed={score === n}
-            aria-label={`Puntuar ${n} de 10: ${LABELS[n - 1]}`}
-            onMouseEnter={() => setHover(n)}
-            onFocus={() => setHover(n)}
-            onBlur={() => setHover(null)}
-            onClick={() => rate(n)}
-          >
-            {n}
-          </button>
-        ))}
-      </div>
-      {failed && <p className="error small">No se pudo guardar. Inténtalo de nuevo.</p>}
-      <p className="community">
-        {watchersCount === 0 ? 'Nadie aún' : `Vista por ${watchersCount}`}
-        {r?.averageScore != null && <b>★ {r.averageScore.toFixed(1)}</b>}
-      </p>
-      {ratings.length > 0 && (
-        <ul className="ratings" aria-label="Puntajes de tus amigos">
-          {ratings.map((x) => (
-            <li key={x.tag} className={`${x.tag === me ? 'me ' : ''}${tier(x.score)}`}>
-              {x.tag} <b>{x.score ?? '✓'}</b>
-            </li>
-          ))}
-        </ul>
-      )}
-    </article>
-  )
-})

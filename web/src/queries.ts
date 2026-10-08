@@ -18,3 +18,18 @@ export const useRanking = (studio?: string) =>
 
 export const useHighlights = () =>
   useQuery({ queryKey: ['highlights'], queryFn: api.highlights, refetchInterval: 30000, refetchIntervalInBackground: false })
+
+export const useUsers = () =>
+  useQuery({ queryKey: ['users'], queryFn: api.users, staleTime: 5 * 60 * 1000 })
+
+// Global pages are dynamic: refetched on mount/focus and after every mutation, never on a timer (a poll arriving
+// mid-edit would overwrite an optimistic change).
+export const useHome = () => useQuery({ queryKey: ['home'], queryFn: api.home })
+
+export const useProfile = (tag: string) => useQuery({ queryKey: ['profile', tag], queryFn: () => api.profile(tag) })
+
+export const useSearch = (q: string) =>
+  useQuery({ queryKey: ['search', q], queryFn: () => api.search(q), enabled: q.length >= 2, staleTime: 15000, placeholderData: (prev) => prev })
+
+/** Queries holding per-user title state; invalidated after any mutation. */
+export const DYNAMIC_KEYS = ['home', 'titles', 'search', 'profile', 'progress', 'ratings', 'highlights', 'ranking'] as const
