@@ -66,28 +66,33 @@ function useOpenTitle() {
   }, [qc, detail])
 }
 
-/** One title row: thumb, title (both open the title modal), tags, plus whatever the tab needs on the right and below. */
-function TitleRow({ m, aside, done = false, children }: { m: TitleSummary; aside?: ReactNode; done?: boolean; children?: ReactNode }) {
+/**
+ * One title as a catalog-look card: poster (type badge, optional score pill) and title both open the title modal;
+ * `meta` follows the year, `children` sit under it and `actions` are pinned to the bottom so a row of cards lines up.
+ */
+function ProfileCard({ m, score, scoreLabel, meta, done = false, actions, children }: {
+  m: TitleSummary; score?: number | null; scoreLabel?: string; meta?: string; done?: boolean; actions?: ReactNode; children?: ReactNode
+}) {
   const type = titleType(m)
   const openTitle = useOpenTitle()
+  const open = () => void openTitle(m)
   return (
-    <li className={done ? 'is-done' : undefined}>
-      <button type="button" className="thumb-btn" tabIndex={-1} aria-hidden="true" onClick={() => void openTitle(m)}>
-        <Poster url={m.posterUrl} title={m.title} className="thumb" />
-      </button>
-      <div className="info">
-        <button type="button" className="row-title" onClick={() => void openTitle(m)}>{m.title}</button>
-        <span className="muted">{m.year}</span>
-        <span className="tags">
-          <span className="tag studio">{m.studio.name}</span>
-          <span className="tag">{m.section.name}</span>
-          {type && <span className={`tag ${type.kind}`}>{type.label}</span>}
-        </span>
-        {m.providers?.length > 0 && <ProviderStrip refs={m.providers} />}
-        {children}
+    <article className={`card p-card ${done ? 'is-done' : ''}`}>
+      <div className="art">
+        <Poster url={m.posterUrl} title={m.title} />
+        {/* Mouse/touch convenience; keyboard and screen-reader users open the modal from the title. */}
+        <button type="button" className="art-open" tabIndex={-1} aria-hidden="true" onClick={open} />
+        {type && <span className={`badge ${type.kind}`}>{type.label}</span>}
+        {score !== undefined && (
+          <span className={`my-score ${score === null ? 'none' : ''}`} title={scoreLabel}>{score === null ? 'Sin puntaje' : `★ ${score}`}</span>
+        )}
       </div>
-      {aside}
-    </li>
+      <h3><button type="button" className="title-open" aria-haspopup="dialog" onClick={open}>{m.title}</button></h3>
+      <p className="year">{m.year}{meta ? ` · ${meta}` : ''}</p>
+      <ProviderStrip refs={m.providers} />
+      {children}
+      {actions && <div className="p-actions">{actions}</div>}
+    </article>
   )
 }
 
@@ -282,6 +287,7 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
     }
   }
   const studioName = stats.byStudio.find((s) => s.slug === studio)?.name
+  const scoreLabel = own ? 'Tu puntaje' : `Puntaje de @${data.user.tag}`
   const dist = Array.from({ length: 10 }, (_, i) => stats.scoreDistribution[String(i + 1)] ?? 0)
   const toggle = (slug: string) =>
     setClosed((c) => {
@@ -358,11 +364,9 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
 
             {groups.length === 0 && <p className="muted">No hay títulos con estos filtros.</p>}
             {studio !== 'all' ? (
-              <ul className="list">
-                {groups.flatMap((g) => g.items).map((e) => (
-                  <TitleRow key={e.movie.id} m={e.movie} aside={<span className={`score-pill ${e.score === null ? 'none' : ''}`}>{e.score ?? 'Sin puntaje'}</span>} />
-                ))}
-              </ul>
+              <div className="grid era-body p-grid">
+                {groups.flatMap((g) => g.items).map((e) => <ProfileCard key={e.movie.id} m={e.movie} score={e.score} scoreLabel={scoreLabel} />)}
+              </div>
             ) : (
               groups.map(({ s, items }) => {
                 const open = !closed.has(s.slug)
@@ -371,17 +375,15 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
                     <h2>
                       <button type="button" className="era-toggle" aria-expanded={open} onClick={() => toggle(s.slug)}>
                         <i className={`chev ${open ? 'open' : ''}`} aria-hidden="true" />
-                        <StudioLogo name={s.name} url={s.logoUrl} className="mini" />
+                        {s.logoUrl && <StudioLogo name={s.name} url={s.logoUrl} className="mini" />}
                         {s.name}
                         <em>{s.watched} {s.watched === 1 ? 'vista' : 'vistas'}{s.avgScore !== null ? ` · prom. ${s.avgScore.toFixed(1)}` : ''}</em>
                       </button>
                     </h2>
                     {open && (
-                      <ul className="list">
-                        {items.map((e) => (
-                          <TitleRow key={e.movie.id} m={e.movie} aside={<span className={`score-pill ${e.score === null ? 'none' : ''}`}>{e.score ?? 'Sin puntaje'}</span>} />
-                        ))}
-                      </ul>
+                      <div className="grid era-body p-grid">
+                        {items.map((e) => <ProfileCard key={e.movie.id} m={e.movie} score={e.score} scoreLabel={scoreLabel} />)}
+                      </div>
                     )}
                   </section>
                 )
@@ -397,14 +399,15 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
             {own && 'Toca el marcador en cualquier título para guardarlo aquí y verlo después.'}
           </EmptyState>
         ) : (
-          <ul className="list">
+          <div className="grid p-grid">
             {data.pending.map((m) => (
-              <TitleRow
+              <ProfileCard
                 key={m.id}
                 m={m}
+                meta={m.studio.name}
                 done={done.has(`t:${m.id}`)}
-                aside={own && (
-                  <span className="row-actions">
+                actions={own && (
+                  <>
                     {done.get(`t:${m.id}`) === 'watched' ? (
                       <span className="tag ok">Vista ✓</span>
                     ) : done.get(`t:${m.id}`) === 'removed' ? (
@@ -415,13 +418,13 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
                         <button type="button" className="btn btn-ghost btn-sm" disabled={busy === `t:${m.id}`} onClick={() => void act(`t:${m.id}`, setPending(m.id, false), 'removed')}>Quitar</button>
                       </>
                     )}
-                  </span>
+                  </>
                 )}
               >
                 <span className="muted small-note">Agregada el {fmtDate(m.addedAt)}</span>
-              </TitleRow>
+              </ProfileCard>
             ))}
-          </ul>
+          </div>
         )
       )}
 
@@ -452,13 +455,14 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
               </button>
             </div>
           )}
-          <ul className="list">
+          <div className="grid p-grid">
             {received.map((g) => (
-              <TitleRow
+              <ProfileCard
                 key={g.movie.id}
                 m={g.movie}
-                aside={
-                  <span className="row-actions">
+                meta={g.movie.studio.name}
+                actions={
+                  <>
                     {g.watched ? (
                       <span className="tag ok">Ya la viste ✓</span>
                     ) : (
@@ -481,7 +485,7 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
                     >
                       <X size={16} aria-hidden="true" />
                     </button>
-                  </span>
+                  </>
                 }
               >
                 <span className="reco-from">
@@ -490,9 +494,9 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
                 {g.recos.filter((r) => r.note).map((r) => (
                   <q key={r.id} className="reco-note">{g.recos.length > 1 && <b>@{r.from}: </b>}{r.note}</q>
                 ))}
-              </TitleRow>
+              </ProfileCard>
             ))}
-          </ul>
+          </div>
           </>
         )
       )}
@@ -508,14 +512,15 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
             return (
               <section key={g.toTag} className="era">
                 <h2><span className="reco-head">@{g.toTag}<em>{g.items.length} {g.items.length === 1 ? 'recomendación' : 'recomendaciones'} · {seen} {seen === 1 ? 'vista' : 'vistas'}</em></span></h2>
-                <ul className="list">
+                <div className="grid p-grid">
                   {g.items.map((i) => (
-                    <TitleRow
+                    <ProfileCard
                       key={i.id}
                       m={i.movie}
+                      meta={i.movie.studio.name}
                       done={done.has(`r:${i.id}`)}
-                      aside={
-                        <span className="row-actions">
+                      actions={
+                        <>
                           {i.watched ? (
                             <span className="tag ok">La vio ✓{i.score !== null ? ` (${i.score})` : ''}</span>
                           ) : (
@@ -527,14 +532,14 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
                           ) : (
                             <button type="button" className="btn btn-ghost btn-sm" disabled={busy === `r:${i.id}`} onClick={() => void act(`r:${i.id}`, () => api.deleteRecommendation(i.id), 'deleted')} aria-label={`Eliminar la recomendación de ${i.movie.title} a @${g.toTag}`}>Eliminar</button>
                           )}
-                        </span>
+                        </>
                       }
                     >
                       <span className="small-note muted">{fmtDate(i.createdAt)}</span>
                       {i.note && <q className="reco-note">{i.note}</q>}
-                    </TitleRow>
+                    </ProfileCard>
                   ))}
-                </ul>
+                </div>
               </section>
             )
           })

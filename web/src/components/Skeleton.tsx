@@ -112,9 +112,9 @@ export function ProfileSkeleton() {
       </div>
       <Sk className="sk-overview" />
       <Sk className="sk-panel" />
-      <div className="list" aria-hidden="true">
-        {Array.from({ length: 6 }, (_, i) => <Sk key={i} className="sk-row" />)}
-      </div>
+      <Sk className="sk-seg" />
+      <Sk className="sk-h2" style={{ marginTop: 40 }} />
+      <SkGrid cards={10} />
     </Busy>
   )
 }
