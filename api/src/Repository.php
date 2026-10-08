@@ -179,12 +179,12 @@ final class Repository
     }
 
     /**
-     * Compact dynamic data for one studio: only titles with at least one entry.
-     * @return list<array{movieId: int, watched: bool, score: int|null, ratings: list<array>, watchersCount: int, averageScore: float|null}>
+     * Compact dynamic data for one studio: only titles with at least one entry or pending for the user.
+     * @return list<array<string, mixed>>
      */
     public function ratings(int $studioId, int $userId): array
     {
-        $rows = $this->run(
+        $entries = $this->run(
             'SELECT e.movie_id, e.user_id, u.tag, e.score
              FROM watch_entries e
              JOIN users u ON u.id = e.user_id
@@ -194,12 +194,63 @@ final class Repository
              ORDER BY e.movie_id, (e.score IS NULL), e.score DESC, u.tag',
             [$studioId]
         )->fetchAll();
+        $pending = $this->run(
+            'SELECT w.movie_id FROM watchlist w
+             JOIN movies m ON m.id = w.movie_id
+             JOIN sections sec ON sec.id = m.section_id
+             WHERE sec.studio_id = ? AND w.user_id = ?',
+            [$studioId, $userId]
+        )->fetchAll(PDO::FETCH_COLUMN);
+        return array_values($this->buildStates($entries, $pending, $userId));
+    }
 
+    /**
+     * Dynamic state of the given titles for one viewer (blank state for titles nobody touched).
+     * @param list<int> $ids
+     * @return array<int, array<string, mixed>>
+     */
+    public function titleStates(array $ids, int $userId): array
+    {
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        if (!$ids) {
+            return [];
+        }
+        $in = implode(',', array_fill(0, count($ids), '?'));
+        $entries = $this->run(
+            "SELECT e.movie_id, e.user_id, u.tag, e.score FROM watch_entries e JOIN users u ON u.id = e.user_id
+             WHERE e.movie_id IN ($in) ORDER BY e.movie_id, (e.score IS NULL), e.score DESC, u.tag",
+            $ids
+        )->fetchAll();
+        $pending = $this->run(
+            "SELECT movie_id FROM watchlist WHERE user_id = ? AND movie_id IN ($in)",
+            array_merge([$userId], $ids)
+        )->fetchAll(PDO::FETCH_COLUMN);
+        $states = $this->buildStates($entries, $pending, $userId);
+        $out = [];
+        foreach ($ids as $id) {
+            $out[$id] = $states[$id] ?? self::blankState($id);
+        }
+        return $out;
+    }
+
+    /** @return array<string, mixed> */
+    private static function blankState(int $id): array
+    {
+        return ['movieId' => $id, 'watched' => false, 'score' => null, 'pending' => false, 'ratings' => [], 'watchersCount' => 0, 'averageScore' => null];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $entries rows of movie_id, user_id, tag, score
+     * @param list<mixed> $pending movie ids on the viewer's watchlist
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildStates(array $entries, array $pending, int $userId): array
+    {
         $byMovie = [];
-        foreach ($rows as $r) {
+        foreach ($entries as $r) {
             $id = (int) $r['movie_id'];
             if (!isset($byMovie[$id])) {
-                $byMovie[$id] = ['movieId' => $id, 'watched' => false, 'score' => null, 'ratings' => [], 'sum' => 0, 'scored' => 0];
+                $byMovie[$id] = self::blankState($id) + ['sum' => 0, 'scored' => 0];
             }
             $score = $r['score'] === null ? null : (int) $r['score'];
             $byMovie[$id]['ratings'][] = ['tag' => $r['tag'], 'score' => $score];
@@ -212,13 +263,21 @@ final class Repository
                 $byMovie[$id]['scored']++;
             }
         }
+        foreach ($pending as $pid) {
+            $id = (int) $pid;
+            if (!isset($byMovie[$id])) {
+                $byMovie[$id] = self::blankState($id) + ['sum' => 0, 'scored' => 0];
+            }
+            $byMovie[$id]['pending'] = true;
+        }
 
         $out = [];
-        foreach ($byMovie as $m) {
-            $out[] = [
+        foreach ($byMovie as $id => $m) {
+            $out[$id] = [
                 'movieId' => $m['movieId'],
                 'watched' => $m['watched'],
                 'score' => $m['score'],
+                'pending' => $m['pending'],
                 'ratings' => $m['ratings'],
                 'watchersCount' => count($m['ratings']),
                 'averageScore' => $m['scored'] > 0 ? round($m['sum'] / $m['scored'], 2) : null,
@@ -253,6 +312,9 @@ final class Repository
                 [$userId, $movieId, $score, $watchedAt]
             );
         }
+
+        // A watched title is no longer pending.
+        $this->run('DELETE FROM watchlist WHERE user_id = ? AND movie_id = ?', [$userId, $movieId]);
 
         return ['movieId' => $movieId, 'watched' => true, 'score' => $score, 'watchedAt' => self::iso($watchedAt)];
     }
@@ -477,7 +539,7 @@ final class Repository
         ];
     }
 
-    /** @return array{user: array{tag: string}, stats: array, entries: list<array>} */
+    /** @return array{user: array{tag: string}, stats: array, watched: list<array>} */
     public function userList(array $user): array
     {
         $rows = $this->run(
@@ -560,8 +622,365 @@ final class Repository
                 'scoreDistribution' => $distribution,
                 'byStudio' => $byStudio,
             ],
-            'entries' => $entries,
+            'watched' => $entries,
         ];
+    }
+
+    // ---- watchlist ----
+
+    public function addToWatchlist(int $userId, int $movieId): void
+    {
+        if ($this->run('SELECT 1 FROM watch_entries WHERE user_id = ? AND movie_id = ?', [$userId, $movieId])->fetch()) {
+            return; // already watched: nothing to want
+        }
+        if ($this->run('SELECT 1 FROM watchlist WHERE user_id = ? AND movie_id = ?', [$userId, $movieId])->fetch()) {
+            return;
+        }
+        try {
+            $this->run('INSERT INTO watchlist (user_id, movie_id, added_at) VALUES (?, ?, ?)', [$userId, $movieId, date('Y-m-d H:i:s')]);
+        } catch (PDOException $e) {
+            // Concurrent duplicate: already pending.
+        }
+    }
+
+    public function removeFromWatchlist(int $userId, int $movieId): void
+    {
+        $this->run('DELETE FROM watchlist WHERE user_id = ? AND movie_id = ?', [$userId, $movieId]);
+    }
+
+    // ---- recommendations ----
+
+    /** @return list<string> */
+    public function userTags(): array
+    {
+        return $this->run('SELECT tag FROM users ORDER BY tag_normalized', [])->fetchAll(PDO::FETCH_COLUMN);
+    }
+
+    /**
+     * Recommends a title to the given friends (upsert per recipient). Self and unknown tags are ignored.
+     * @param list<string> $toTags
+     * @return list<string> tags that received it
+     */
+    public function recommend(int $fromId, int $movieId, array $toTags, ?string $note): array
+    {
+        $sent = [];
+        $now = date('Y-m-d H:i:s');
+        foreach (array_unique(array_map('strtolower', $toTags)) as $tag) {
+            $to = $this->userByTag($tag);
+            if ($to === null || $to['id'] === $fromId) {
+                continue;
+            }
+            $existing = $this->run(
+                'SELECT id FROM recommendations WHERE from_user_id = ? AND to_user_id = ? AND movie_id = ?',
+                [$fromId, $to['id'], $movieId]
+            )->fetch();
+            if ($existing) {
+                $this->run('UPDATE recommendations SET note = ?, created_at = ? WHERE id = ?', [$note, $now, $existing['id']]);
+            } else {
+                $this->run(
+                    'INSERT INTO recommendations (from_user_id, to_user_id, movie_id, note, created_at) VALUES (?, ?, ?, ?, ?)',
+                    [$fromId, $to['id'], $movieId, $note, $now]
+                );
+            }
+            $sent[] = $to['tag'];
+        }
+        return $sent;
+    }
+
+    /** Deletes a recommendation; only its sender can. Returns false when there is nothing to delete. */
+    public function deleteRecommendation(int $id, int $userId): bool
+    {
+        return $this->run('DELETE FROM recommendations WHERE id = ? AND from_user_id = ?', [$id, $userId])->rowCount() > 0;
+    }
+
+    /**
+     * Profile: stats and watched list, pending titles and, for the owner only, both recommendation tabs.
+     * @return array<string, mixed>
+     */
+    public function profile(array $user, int $viewerId): array
+    {
+        $out = $this->userList($user);
+
+        $out['pending'] = array_map(
+            fn(array $r) => self::titleRow($r) + ['addedAt' => self::iso($r['added_at'])],
+            $this->run(
+                'SELECT ' . self::TITLE_COLS . ', wl.added_at ' . self::TITLE_FROM . '
+                 JOIN watchlist wl ON wl.movie_id = m.id WHERE wl.user_id = ? ORDER BY wl.added_at DESC, m.id',
+                [$user['id']]
+            )->fetchAll()
+        );
+
+        if ($user['id'] !== $viewerId) {
+            return $out;
+        }
+
+        $out['recommendedToMe'] = array_map(fn(array $r) => [
+            'id' => (int) $r['reco_id'],
+            'movie' => self::titleRow($r),
+            'from' => $r['from_tag'],
+            'note' => $r['note'],
+            'createdAt' => self::iso($r['created_at']),
+            'watched' => $r['mine_movie'] !== null,
+            'pending' => $r['pend_movie'] !== null,
+        ], $this->run(
+            'SELECT ' . self::TITLE_COLS . ', r.id AS reco_id, r.note, r.created_at, f.tag AS from_tag,
+                    mine.movie_id AS mine_movie, pend.movie_id AS pend_movie ' . self::TITLE_FROM . '
+             JOIN recommendations r ON r.movie_id = m.id AND r.to_user_id = ?
+             JOIN users f ON f.id = r.from_user_id
+             LEFT JOIN watch_entries mine ON mine.movie_id = m.id AND mine.user_id = r.to_user_id
+             LEFT JOIN watchlist pend ON pend.movie_id = m.id AND pend.user_id = r.to_user_id
+             ORDER BY r.created_at DESC, r.id DESC',
+            [$user['id']]
+        )->fetchAll());
+
+        $groups = [];
+        foreach ($this->run(
+            'SELECT ' . self::TITLE_COLS . ', r.id AS reco_id, r.note, r.created_at, t.tag AS to_tag, t.tag_normalized AS to_norm,
+                    theirs.movie_id AS seen_movie, theirs.score AS their_score ' . self::TITLE_FROM . '
+             JOIN recommendations r ON r.movie_id = m.id AND r.from_user_id = ?
+             JOIN users t ON t.id = r.to_user_id
+             LEFT JOIN watch_entries theirs ON theirs.movie_id = m.id AND theirs.user_id = r.to_user_id
+             ORDER BY t.tag_normalized, r.created_at DESC, r.id DESC',
+            [$user['id']]
+        )->fetchAll() as $r) {
+            $groups[$r['to_norm']]['toTag'] = $r['to_tag'];
+            $groups[$r['to_norm']]['items'][] = [
+                'id' => (int) $r['reco_id'],
+                'movie' => self::titleRow($r),
+                'note' => $r['note'],
+                'createdAt' => self::iso($r['created_at']),
+                'watched' => $r['seen_movie'] !== null,
+                'score' => $r['their_score'] === null ? null : (int) $r['their_score'],
+            ];
+        }
+        $out['myRecommendations'] = array_values($groups);
+        return $out;
+    }
+
+    // ---- global catalog: home rows, filtered titles, search ----
+
+    private const TITLE_COLS = 'm.id, m.title, m.original_title, m.year, m.poster_url, m.media_type, m.tmdb_id,
+        sec.slug AS section_slug, sec.name AS section_name, s.slug AS studio_slug, s.name AS studio_name, s.kind AS studio_kind';
+    private const TITLE_FROM = 'FROM movies m JOIN sections sec ON sec.id = m.section_id JOIN studios s ON s.id = sec.studio_id';
+    private const STATS_JOIN = 'LEFT JOIN (SELECT movie_id, COUNT(*) AS watchers, AVG(score) AS avg_score, COUNT(score) AS scored
+                                            FROM watch_entries GROUP BY movie_id) w ON w.movie_id = m.id';
+
+    /** @return array<string, mixed> */
+    private static function titleRow(array $r): array
+    {
+        return [
+            'id' => (int) $r['id'],
+            'title' => $r['title'],
+            'originalTitle' => $r['original_title'],
+            'year' => (int) $r['year'],
+            'posterUrl' => $r['poster_url'],
+            'mediaType' => $r['media_type'],
+            'tmdbId' => $r['tmdb_id'] === null ? null : (int) $r['tmdb_id'],
+            'studio' => ['slug' => $r['studio_slug'], 'name' => $r['studio_name'], 'kind' => $r['studio_kind']],
+            'section' => ['slug' => $r['section_slug'], 'name' => $r['section_name']],
+        ];
+    }
+
+    /**
+     * Title rows with the viewer's dynamic state attached under "state".
+     * @param list<array<string, mixed>> $rows raw rows selected with TITLE_COLS
+     * @return list<array<string, mixed>>
+     */
+    private function withStates(array $rows, int $userId): array
+    {
+        $states = $this->titleStates(array_map(fn(array $r) => (int) $r['id'], $rows), $userId);
+        return array_map(fn(array $r) => self::titleRow($r) + ['state' => $states[(int) $r['id']]], $rows);
+    }
+
+    /** @return list<array<string, mixed>> raw rows; $params are in SQL order (join, where) */
+    private function titleQuery(string $join, string $where, string $order, array $params, int $limit, int $offset = 0): array
+    {
+        $sql = 'SELECT ' . self::TITLE_COLS . ' ' . self::TITLE_FROM . ' ' . $join
+            . ($where !== '' ? ' WHERE ' . $where : '') . ' ORDER BY ' . $order . ' LIMIT ' . $limit . ' OFFSET ' . $offset;
+        return $this->run($sql, $params)->fetchAll();
+    }
+
+    /**
+     * Home rows (each at most 20 items, empty rows omitted). Dynamic, per viewer.
+     * @return array{rows: list<array<string, mixed>>}
+     */
+    public function home(int $userId): array
+    {
+        $rows = [];
+        $titles = function (string $key, string $title, ?string $link, array $raw) use (&$rows, $userId): void {
+            if ($raw) {
+                $rows[] = ['key' => $key, 'title' => $title, 'link' => $link, 'kind' => 'titles', 'items' => $this->withStates($raw, $userId)];
+            }
+        };
+        $popular = 'm.popularity DESC, m.vote_count DESC, m.id';
+
+        $titles('most-watched', 'Lo más visto del grupo', '/catalogo?sort=group-watched',
+            $this->titleQuery(self::STATS_JOIN, 'w.watchers IS NOT NULL', 'w.watchers DESC, ' . $popular, [], 20));
+        $titles('best-rated', 'Mejor puntuadas por el grupo', '/catalogo?sort=score',
+            $this->titleQuery(self::STATS_JOIN, 'w.scored >= 2', 'w.avg_score DESC, w.scored DESC, m.id', [], 20));
+        $titles('pending', 'Tus pendientes', '/catalogo?status=pending',
+            $this->titleQuery('JOIN watchlist wl ON wl.movie_id = m.id AND wl.user_id = ?', '', 'wl.added_at DESC, m.id', [$userId], 20));
+        $titles('recommended', 'Te recomendaron', '/u/me?tab=recomendadas',
+            $this->titleQuery(
+                'JOIN (SELECT movie_id, MAX(created_at) AS at FROM recommendations WHERE to_user_id = ? GROUP BY movie_id) rc ON rc.movie_id = m.id
+                 LEFT JOIN watch_entries mine ON mine.movie_id = m.id AND mine.user_id = ?',
+                'mine.movie_id IS NULL', 'rc.at DESC, m.id', [$userId, $userId], 20
+            ));
+
+        $sagas = $this->popularSagas($userId);
+        if ($sagas) {
+            $rows[] = ['key' => 'sagas', 'title' => 'Sagas populares', 'link' => null, 'kind' => 'sagas', 'items' => $sagas];
+        }
+
+        $titles('anime', 'Populares en Anime', '/catalogo?studio=anime&sort=popular',
+            $this->titleQuery('', 's.slug = ?', $popular, ['anime'], 20));
+        $titles('series', 'Series populares', '/catalogo?type=series&sort=popular',
+            $this->titleQuery('', "m.media_type = 'series' AND s.slug <> ?", $popular, ['anime'], 20));
+        $titles('movies', 'Películas populares', '/catalogo?type=movie&sort=popular',
+            $this->titleQuery('', "m.media_type = 'movie' AND s.slug <> ?", $popular, ['anime'], 20));
+        return ['rows' => $rows];
+    }
+
+    /** Sagas (collections with 2+ titles) ranked by the summed TMDB popularity of their titles. @return list<array<string, mixed>> */
+    private function popularSagas(int $userId): array
+    {
+        $sagas = [];
+        foreach ($this->run(
+            'SELECT c.id, c.slug, c.name, c.poster_url, s.slug AS studio_slug, COUNT(m.id) AS n,
+                    COALESCE(SUM(m.popularity), 0) AS pop, COUNT(e.movie_id) AS seen, MIN(m.poster_url) AS first_poster
+             FROM collections c
+             JOIN movies m ON m.collection_id = c.id
+             JOIN sections sec ON sec.id = m.section_id
+             JOIN studios s ON s.id = sec.studio_id
+             LEFT JOIN watch_entries e ON e.movie_id = m.id AND e.user_id = ?
+             GROUP BY c.id, c.slug, c.name, c.poster_url, s.slug',
+            [$userId]
+        )->fetchAll() as $r) {
+            $k = (int) $r['id'];
+            $n = (int) $r['n'];
+            if (!isset($sagas[$k])) {
+                $sagas[$k] = ['slug' => $r['slug'], 'name' => $r['name'], 'posterUrl' => $r['poster_url'] ?: $r['first_poster'],
+                    'total' => 0, 'seen' => 0, 'pop' => 0.0, 'studioSlug' => $r['studio_slug'], 'best' => 0];
+            }
+            $sagas[$k]['total'] += $n;
+            $sagas[$k]['seen'] += (int) $r['seen'];
+            $sagas[$k]['pop'] += (float) $r['pop'];
+            if ($n > $sagas[$k]['best']) { // link to the studio holding most of the saga
+                $sagas[$k]['best'] = $n;
+                $sagas[$k]['studioSlug'] = $r['studio_slug'];
+            }
+        }
+        $sagas = array_filter($sagas, fn(array $x) => $x['best'] >= 2);
+        usort($sagas, fn(array $a, array $b) => $b['pop'] <=> $a['pop'] ?: strcmp($a['name'], $b['name']));
+        return array_map(fn(array $x) => [
+            'slug' => $x['slug'], 'name' => $x['name'], 'posterUrl' => $x['posterUrl'],
+            'total' => $x['total'], 'seen' => $x['seen'], 'studioSlug' => $x['studioSlug'],
+        ], array_slice($sagas, 0, 20));
+    }
+
+    /**
+     * Paged, filtered titles across all catalogs.
+     * @param array<string, mixed> $f type, studio, decade, status, sort, q, page
+     * @return array<string, mixed>
+     */
+    public function titles(int $userId, array $f): array
+    {
+        $size = 60;
+        $page = max(1, (int) ($f['page'] ?? 1));
+        $where = [];
+        $params = [];
+        if (in_array($f['type'] ?? '', ['movie', 'series'], true)) {
+            $where[] = 'm.media_type = ?';
+            $params[] = $f['type'];
+        }
+        if (($f['studio'] ?? '') !== '') {
+            $where[] = 's.slug = ?';
+            $params[] = $f['studio'];
+        }
+        if (($f['decade'] ?? 0) > 0) {
+            $where[] = 'm.year >= ? AND m.year < ?';
+            $params[] = (int) $f['decade'];
+            $params[] = (int) $f['decade'] + 10;
+        }
+        $status = $f['status'] ?? '';
+        if ($status === 'watched' || $status === 'unwatched') {
+            $where[] = ($status === 'watched' ? '' : 'NOT ') . 'EXISTS (SELECT 1 FROM watch_entries x WHERE x.movie_id = m.id AND x.user_id = ?)';
+            $params[] = $userId;
+        } elseif ($status === 'pending') {
+            $where[] = 'EXISTS (SELECT 1 FROM watchlist x WHERE x.movie_id = m.id AND x.user_id = ?)';
+            $params[] = $userId;
+        }
+        $q = trim((string) ($f['q'] ?? ''));
+        if ($q !== '') {
+            $where[] = '(m.title LIKE ? OR m.original_title LIKE ?)'; // unicode_ci: case and accent insensitive
+            $like = '%' . addcslashes($q, '%_\\') . '%';
+            $params[] = $like;
+            $params[] = $like;
+        }
+        $orders = [
+            'year' => 'm.year DESC, m.popularity DESC, m.id',
+            'score' => 'w.avg_score IS NULL, w.avg_score DESC, w.scored DESC, m.popularity DESC, m.id',
+            'group-watched' => 'w.watchers IS NULL, w.watchers DESC, m.popularity DESC, m.id',
+            'title' => 'm.title ASC, m.id',
+        ];
+        $order = $orders[(string) ($f['sort'] ?? '')] ?? 'm.popularity DESC, m.vote_count DESC, m.id';
+        $join = strpos($order, 'w.') !== false ? self::STATS_JOIN : '';
+        $cond = implode(' AND ', $where);
+
+        $total = (int) $this->run('SELECT COUNT(*) ' . self::TITLE_FROM . ($cond !== '' ? ' WHERE ' . $cond : ''), $params)->fetchColumn();
+        $raw = $this->titleQuery($join, $cond, $order, $params, $size, ($page - 1) * $size);
+        return ['items' => $this->withStates($raw, $userId), 'total' => $total, 'page' => $page, 'hasMore' => $page * $size < $total];
+    }
+
+    /** Lowercase and strip accents so "Señor" and "senor" compare equal. */
+    private static function fold(string $s): string
+    {
+        $s = function_exists('mb_strtolower') ? mb_strtolower($s, 'UTF-8') : strtolower($s);
+        return strtr($s, [
+            'á' => 'a', 'à' => 'a', 'ä' => 'a', 'â' => 'a', 'ã' => 'a', 'å' => 'a', 'é' => 'e', 'è' => 'e', 'ë' => 'e', 'ê' => 'e',
+            'í' => 'i', 'ì' => 'i', 'ï' => 'i', 'î' => 'i', 'ó' => 'o', 'ò' => 'o', 'ö' => 'o', 'ô' => 'o', 'õ' => 'o',
+            'ú' => 'u', 'ù' => 'u', 'ü' => 'u', 'û' => 'u', 'ñ' => 'n', 'ç' => 'c',
+        ]);
+    }
+
+    /**
+     * Global search over title and original title: prefix match > word match > contains, then popularity. Top 30.
+     * @return list<array<string, mixed>>
+     */
+    public function search(string $q, int $userId): array
+    {
+        $needle = self::fold(trim($q));
+        if (strlen($needle) < 2) {
+            return [];
+        }
+        $like = '%' . addcslashes(trim($q), '%_\\') . '%';
+        $raw = $this->titleQuery('', '(m.title LIKE ? OR m.original_title LIKE ?)', 'm.popularity DESC, m.vote_count DESC, m.id', [$like, $like], 300);
+
+        $rank = function (array $r) use ($needle): int {
+            $best = 3;
+            foreach ([$r['title'], $r['original_title']] as $name) {
+                if ($name === null) {
+                    continue;
+                }
+                $name = self::fold((string) $name);
+                if (strpos($name, $needle) === 0) {
+                    return 0;
+                }
+                if (preg_match('/(^|[^\p{L}\p{N}])' . preg_quote($needle, '/') . '/u', $name) === 1) {
+                    $best = min($best, 1);
+                } elseif (strpos($name, $needle) !== false) {
+                    $best = min($best, 2);
+                }
+            }
+            return $best;
+        };
+        $ranked = [];
+        foreach ($raw as $i => $r) { // $raw is already popularity-ordered, so the index breaks ties
+            $ranked[] = [$rank($r), $i, $r];
+        }
+        usort($ranked, fn(array $a, array $b) => [$a[0], $a[1]] <=> [$b[0], $b[1]]);
+        $top = array_map(fn(array $x) => $x[2], array_slice($ranked, 0, 30));
+        return $this->withStates($top, $userId);
     }
 
     private function user(string $sql, array $params): ?array

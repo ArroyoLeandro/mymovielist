@@ -105,12 +105,72 @@ try {
         Http::json($rows);
     } elseif ($path === '/api/highlights' && $method === 'GET') {
         Http::json($repo->highlights());
-    } elseif ($method === 'GET' && preg_match('#^/api/users/([A-Za-z0-9_-]+)/list$#', $path, $m)) {
+    } elseif ($method === 'GET' && preg_match('#^/api/users/([A-Za-z0-9_-]+)/profile$#', $path, $m)) {
         $user = $repo->userByTag($m[1]);
         if ($user === null) {
             throw new HttpError(404, 'User not found.');
         }
-        Http::json($repo->userList($user));
+        Http::json($repo->profile($user, $current['id']));
+    } elseif ($path === '/api/users' && $method === 'GET') {
+        Http::json($repo->userTags());
+    } elseif ($path === '/api/home' && $method === 'GET') {
+        Http::json($repo->home($current['id']));
+    } elseif ($path === '/api/titles' && $method === 'GET') {
+        $f = [];
+        foreach (['type', 'studio', 'status', 'sort', 'q'] as $k) {
+            $f[$k] = isset($_GET[$k]) && is_string($_GET[$k]) ? $_GET[$k] : '';
+        }
+        $f['decade'] = isset($_GET['decade']) ? (int) $_GET['decade'] : 0;
+        $f['page'] = isset($_GET['page']) ? (int) $_GET['page'] : 1;
+        Http::json($repo->titles($current['id'], $f));
+    } elseif ($path === '/api/search' && $method === 'GET') {
+        $q = isset($_GET['q']) && is_string($_GET['q']) ? $_GET['q'] : '';
+        Http::json($repo->search($q, $current['id']));
+    } elseif (preg_match('#^/api/movies/(\d+)/watchlist$#', $path, $m) && ($method === 'PUT' || $method === 'DELETE')) {
+        $movieId = (int) $m[1];
+        if (!$repo->movieExists($movieId)) {
+            throw new HttpError(404, 'Movie not found.');
+        }
+        if ($method === 'PUT') {
+            $repo->addToWatchlist($current['id'], $movieId);
+        } else {
+            $repo->removeFromWatchlist($current['id'], $movieId);
+        }
+        Http::noContent();
+    } elseif ($method === 'POST' && preg_match('#^/api/movies/(\d+)/recommendations$#', $path, $m)) {
+        $movieId = (int) $m[1];
+        $body = Http::jsonBody();
+        $toTags = $body['toTags'] ?? null;
+        if (!is_array($toTags) || !$toTags || count($toTags) > 50) {
+            throw new HttpError(422, '"toTags" must be a non-empty list of user tags.');
+        }
+        foreach ($toTags as $t) {
+            if (!is_string($t)) {
+                throw new HttpError(422, '"toTags" must be a list of strings.');
+            }
+        }
+        $note = $body['note'] ?? null;
+        if ($note !== null && !is_string($note)) {
+            throw new HttpError(422, '"note" must be a string.');
+        }
+        $note = $note === null ? '' : trim($note);
+        $len = function_exists('mb_strlen') ? mb_strlen($note, 'UTF-8') : strlen($note);
+        if ($len > 280) {
+            throw new HttpError(422, '"note" can have at most 280 characters.');
+        }
+        if (!$repo->movieExists($movieId)) {
+            throw new HttpError(404, 'Movie not found.');
+        }
+        $sent = $repo->recommend($current['id'], $movieId, $toTags, $note === '' ? null : $note);
+        if (!$sent) {
+            throw new HttpError(422, 'Choose at least one friend (not yourself).');
+        }
+        Http::json(['sentTo' => $sent], 201);
+    } elseif ($method === 'DELETE' && preg_match('#^/api/recommendations/(\d+)$#', $path, $m)) {
+        if (!$repo->deleteRecommendation((int) $m[1], $current['id'])) {
+            throw new HttpError(404, 'Recommendation not found.');
+        }
+        Http::noContent();
     }
 
     throw new HttpError(404, 'Not found.');
