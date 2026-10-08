@@ -541,15 +541,58 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
 
 /* ---------- 13. Profile ---------- */
 .stats { display: grid; grid-template-columns: auto auto 1fr; gap: var(--s4); margin: var(--s5) 0 var(--s5); }
-.stat, .dist { padding: var(--s4) 22px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+.stat, .score-panel { padding: var(--s4) 22px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
 .stat { display: grid; align-content: center; min-width: 150px; }
 .stat b { font-family: var(--display); font-size: 2.4rem; font-weight: 800; line-height: 1; color: var(--gold); }
 .stat b small { color: var(--muted); font-size: 1.1rem; font-weight: 500; }
 .stat span { margin-top: 6px; color: var(--muted); font-size: 0.85rem; }
-.dist { display: flex; align-items: stretch; gap: 6px; min-height: 110px; }
-.dist-col { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: var(--s1); }
-.dist-col i { flex: none; display: block; width: 100%; min-height: 3px; border-radius: 4px 4px 0 0; background: linear-gradient(var(--gold), var(--rose)); }
-.dist-col span { color: var(--muted); font-size: var(--fs-xs); }
+.score-panel { min-width: 0; }
+
+/* Score chart (components/ScoreChart): one hue, columns in a plot of definite height (--sc-h). The top padding is the
+   room for the one direct label, so a full-height bar plus its label still ends inside the plot. */
+.score-chart { --sc-h: 120px; --sc-dim: color-mix(in oklab, var(--gold) 42%, var(--panel)); display: grid; min-width: 0; margin: 0; }
+.sc-title { margin-bottom: var(--s2); color: var(--muted); font-size: 0.85rem; }
+.sc-plot {
+  position: relative; display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 2px;
+  height: var(--sc-h); padding-top: 18px; border-bottom: 1px solid var(--line-strong);
+}
+.sc-col { position: relative; display: flex; min-width: 0; border-radius: 4px 4px 0 0; outline-offset: 0; cursor: default; }
+.sc-track { position: relative; flex: 1; }
+.sc-bar {
+  position: absolute; bottom: 0; left: 50%; translate: -50% 0; width: min(100%, 24px);
+  height: max(4px, var(--h, 0%)); border-radius: 4px 4px 0 0; background: var(--sc-dim);
+  transition: background-color var(--fast);
+}
+.sc-col.is-top .sc-bar { background: var(--gold); }
+.sc-bar.is-zero { height: 2px; border-radius: 0; background: var(--line-strong); }
+.sc-col:hover .sc-bar:not(.is-zero), .sc-col:focus-visible .sc-bar:not(.is-zero) { background: var(--gold-hover); }
+.sc-val {
+  position: absolute; bottom: 100%; left: 50%; translate: -50% 0; padding-bottom: 2px;
+  color: var(--text); font-size: var(--fs-xs); font-style: normal; font-weight: 700; line-height: 1.2; white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.sc-tip {
+  position: absolute; top: 0; z-index: 2; padding: 3px 8px; border: 1px solid var(--line-strong); border-radius: var(--r-sm);
+  background: var(--panel-2); box-shadow: 0 6px 18px #0008; color: var(--muted); font-size: var(--fs-xs); white-space: nowrap;
+  opacity: 0; pointer-events: none; transition: opacity var(--fast);
+}
+.sc-tip b { color: var(--text); font-weight: 700; }
+.sc-tip.start { left: 0; }
+.sc-tip.center { left: 50%; translate: -50% 0; }
+.sc-tip.end { right: 0; }
+.sc-col:hover .sc-tip, .sc-col:focus-visible .sc-tip { opacity: 1; }
+.sc-empty { position: absolute; inset: 0; display: grid; place-items: center; padding: var(--s2); color: var(--muted); font-size: var(--fs-meta); text-align: center; }
+.sc-axis { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 2px; padding-top: var(--s1); }
+.sc-axis span { color: var(--muted); font-size: var(--fs-xs); text-align: center; font-variant-numeric: tabular-nums; }
+/* Average on the score axis: a caret at its exact position, the label clamped so it never leaves the chart. */
+.sc-avg { --at: 50%; position: relative; height: 22px; }
+.sc-avg i {
+  position: absolute; top: 0; left: var(--at); translate: -50% 0; width: 0; height: 0;
+  border: 5px solid transparent; border-top: 0; border-bottom: 6px solid var(--text);
+}
+.sc-avg span {
+  position: absolute; top: 6px; left: clamp(28px, var(--at), calc(100% - 28px)); translate: -50% 0;
+  color: var(--text); font-size: var(--fs-xs); font-weight: 600; white-space: nowrap;
+}
 .studio-bars {
   grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 22px;
   padding: 14px 22px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
@@ -602,9 +645,10 @@ button.row-title { justify-self: start; padding: 0; border: 0; background: none;
 @media (max-width: 719.98px) {
   .stats { grid-template-columns: 1fr 1fr; }
   .stat { min-width: 0; }
-  .dist { grid-column: 1 / -1; }
+  .score-panel { grid-column: 1 / -1; }
 }
 @media (max-width: 599.98px) {
+  .score-chart { --sc-h: 100px; }
   .list li { grid-template-columns: 52px minmax(0, 1fr); }
   .list li > .row-actions, .list li > .score-pill { grid-column: 2; justify-self: start; }
 }

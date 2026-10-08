@@ -5,6 +5,7 @@ import { api, type ListEntry, type Profile as ProfileData, type Recommended, typ
 import { useAuth } from '../auth'
 import { ProviderStrip } from '../components/Providers'
 import Poster from '../components/Poster'
+import ScoreChart from '../components/ScoreChart'
 import StudioLogo from '../components/StudioLogo'
 import { Bookmark, Eye, Inbox, Send, X } from 'lucide-react'
 import { ProfileSkeleton } from '../components/Skeleton'
@@ -218,7 +219,6 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
   const { stats } = data
   const pct = stats.totalMovies ? Math.round((stats.watchedCount / stats.totalMovies) * 100) : 0
   const dist = Array.from({ length: 10 }, (_, i) => stats.scoreDistribution[String(i + 1)] ?? 0)
-  const maxDist = Math.max(1, ...dist)
   const toggle = (slug: string) =>
     setClosed((c) => {
       const n = new Set(c)
@@ -235,14 +235,7 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
       <section className="stats">
         <div className="stat"><b>{stats.watchedCount}<small>/{stats.totalMovies}</small></b><span>vistas &middot; {pct}%</span></div>
         <div className="stat"><b>{stats.averageScore !== null ? stats.averageScore.toFixed(1) : '–'}</b><span>puntaje promedio</span></div>
-        <div className="dist" aria-label="Distribución de puntajes">
-          {dist.map((n, i) => (
-            <div key={i} className="dist-col" title={`${n} ${n === 1 ? 'título' : 'títulos'} con puntaje ${i + 1}`}>
-              <i style={{ height: `${(n / maxDist) * 100}%` }} />
-              <span>{i + 1}</span>
-            </div>
-          ))}
-        </div>
+        <div className="score-panel"><ScoreChart counts={dist} average={stats.averageScore} /></div>
         {stats.byStudio.length > 0 && (
           <div className="studio-bars">
             {stats.byStudio.map((s) => (
