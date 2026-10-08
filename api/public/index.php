@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 use App\Auth;
 use App\CatalogImporter;
+use App\CatalogSync;
 use App\Db;
 use App\Http;
 use App\HttpError;
@@ -214,6 +215,90 @@ try {
             'title' => $repo->titleById($res['id'], $current['id']),
             'studio' => $repo->studioOfTitle($res['id']),
         ], $res['created'] ? 201 : 200);
+    } elseif (strpos($path, '/api/admin/') === 0) {
+        // Admin (catalog sync on demand): logged-in session + admin unlock (30 min) with the admin password.
+        $hash = (string) ($config['admin_password_hash'] ?? '');
+        if ($hash === '' || strpos($hash, '$2y$10$replace') === 0) {
+            throw new HttpError(503, 'Admin is not configured (admin_password_hash in config.php).', 'admin_disabled');
+        }
+        $unlocked = (int) ($_SESSION['admin_until'] ?? 0) > time();
+        if ($path === '/api/admin/unlock' && $method === 'POST') {
+            $body = Http::jsonBody();
+            $fails = (array) ($_SESSION['admin_fails'] ?? []);
+            if ((int) ($fails['until'] ?? 0) > time()) {
+                $wait = (int) $fails['until'] - time();
+                header('Retry-After: ' . $wait);
+                throw new HttpError(429, 'Too many failed attempts, try again later.', 'locked_out', ['retryAfter' => $wait]);
+            }
+            $password = is_string($body['password'] ?? null) ? $body['password'] : '';
+            if (!password_verify($password, $hash)) {
+                usleep(800000);
+                $count = (int) ($fails['count'] ?? 0) + 1;
+                $_SESSION['admin_fails'] = $count >= 5 ? ['count' => 0, 'until' => time() + 600] : ['count' => $count, 'until' => 0];
+                throw new HttpError(401, 'Wrong admin password.', 'bad_password', ['attemptsLeft' => $count >= 5 ? 0 : 5 - $count]);
+            }
+            unset($_SESSION['admin_fails']);
+            $_SESSION['admin_until'] = time() + 1800;
+            Http::json(['unlocked' => true, 'expiresIn' => 1800]);
+        }
+        if (!$unlocked) {
+            if ($path === '/api/admin/status' && $method === 'GET') {
+                Http::json(['unlocked' => false]);
+            }
+            throw new HttpError(403, 'Unlock the admin page first.', 'admin_locked');
+        }
+        session_write_close(); // steps take a while: never hold the session lock
+        $sync = new CatalogSync($config, Db::connect($config['db']));
+        if ($path === '/api/admin/status' && $method === 'GET') {
+            Http::json(['unlocked' => true, 'expiresIn' => (int) $_SESSION['admin_until'] - time(), 'steps' => [
+                'full' => count($sync->plan('full')), 'import' => count($sync->plan('import')), 'providers' => 1,
+            ]] + $sync->status());
+        }
+        if ($path === '/api/admin/sync/start' && $method === 'POST') {
+            $body = Http::jsonBody();
+            $mode = $body['mode'] ?? null;
+            if (!in_array($mode, CatalogSync::MODES, true)) {
+                throw new HttpError(422, '"mode" must be full, import or providers.', 'bad_request');
+            }
+            $options = [];
+            foreach (['limit' => [0, 100000], 'staleDays' => [0, 365]] as $k => $range) {
+                if (isset($body[$k])) {
+                    if (!is_int($body[$k]) || $body[$k] < $range[0] || $body[$k] > $range[1]) {
+                        throw new HttpError(422, "\"$k\" must be an integer from {$range[0]} to {$range[1]}.", 'bad_request');
+                    }
+                    $options[$k] = $body[$k];
+                }
+            }
+            $run = $sync->start($mode, $current['tag'], $options);
+            if ($run === null) {
+                throw new HttpError(409, 'Another sync is running.', 'locked', ['running' => $sync->status()['running']]);
+            }
+            Http::json($sync->status()['running'], 201);
+        }
+        if ($path === '/api/admin/sync/step' && $method === 'POST') {
+            $body = Http::jsonBody();
+            if (!is_string($body['runId'] ?? null) || !is_int($body['index'] ?? null)) {
+                throw new HttpError(422, '"runId" (string) and "index" (integer) are required.', 'bad_request');
+            }
+            set_time_limit(120);
+            ignore_user_abort(true); // a closed tab must not cut a step halfway
+            try {
+                Http::json($sync->step($body['runId'], $body['index'], 40.0));
+            } catch (DomainException $e) {
+                throw new HttpError(409, $e->getMessage(), 'run_inactive');
+            }
+        }
+        if ($path === '/api/admin/sync/finish' && $method === 'POST') {
+            $body = Http::jsonBody();
+            if (!is_string($body['runId'] ?? null)) {
+                throw new HttpError(422, '"runId" is required.', 'bad_request');
+            }
+            $run = $sync->finish($body['runId'], ($body['cancelled'] ?? false) === true);
+            if ($run === null) {
+                throw new HttpError(404, 'Run not found.', 'not_found');
+            }
+            Http::json($run);
+        }
     } elseif ($path === '/api/search' && $method === 'GET') {
         $q = isset($_GET['q']) && is_string($_GET['q']) ? $_GET['q'] : '';
         Http::json($repo->search($q, $current['id']));
