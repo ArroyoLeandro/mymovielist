@@ -53,6 +53,10 @@ export const useTitlesList = (filters: TitleFilters) =>
     refetchOnReconnect: false,
   })
 
+// Other versions of a title: static matching plus the viewer's state, patched in place after an action like the lists.
+export const useVersions = (id: number) =>
+  useQuery({ queryKey: ['versions', id], queryFn: () => api.versions(id), staleTime: 10 * 60 * 1000, refetchOnWindowFocus: false })
+
 export const useSearch = (q: string) =>
   useQuery({ queryKey: ['search', q], queryFn: () => api.search(q), enabled: q.length >= 2, staleTime: 15000, placeholderData: (prev) => prev })
 
@@ -62,6 +66,6 @@ export const useTmdbSearch = (q: string, enabled = true) =>
   useQuery({ queryKey: ['tmdb', q], queryFn: () => api.tmdbSearch(q), enabled: enabled && q.length >= 2, staleTime: 10 * 60 * 1000, retry: false })
 
 /** Queries listing titles with per-user state: patched in place after an action, refetched on the next visit. */
-export const LIST_KEYS = ['home', 'titles', 'search', 'profile', 'ratings'] as const
+export const LIST_KEYS = ['home', 'titles', 'search', 'versions', 'profile', 'ratings'] as const
 /** Counters and rankings (no title cards): refetched right away after an action. */
 export const STAT_KEYS = ['progress', 'highlights', 'ranking'] as const

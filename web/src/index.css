@@ -296,7 +296,11 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
   position: absolute; left: 8px; top: 8px; padding: 1px 8px; border-radius: var(--r-pill); pointer-events: none;
   background: #0b0a1ccc; border: 1px solid var(--rose); color: var(--rose);
   font-size: var(--fs-xs); font-weight: 700; backdrop-filter: blur(4px);
+  max-width: calc(100% - 16px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* Type label (lib/titleType.ts): series rose (above), animated mint, live action amber. */
+.badge.anim { color: var(--mint); border-color: var(--mint); }
+.badge.live { color: var(--amber); border-color: var(--amber); }
 .my-score {
   position: absolute; left: 6px; bottom: 6px; padding: 1px 8px; border-radius: var(--r-pill); pointer-events: none;
   background: var(--gold); color: var(--gold-ink); font-size: var(--fs-xs); font-weight: 800; line-height: 1.5;
@@ -434,6 +438,8 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
 .tag { padding: 1px 8px; border: 1px solid var(--line-strong); border-radius: var(--r-pill); color: var(--muted); font-size: 0.7rem; white-space: nowrap; }
 .tag.studio { color: var(--gold); border-color: #d4f52655; }
 .tag.series { color: var(--rose); border-color: #ff6b9d55; }
+.tag.anim { color: var(--mint); border-color: #6ee7a055; }
+.tag.live { color: var(--amber); border-color: #ffa94d55; }
 .tag.ok { color: var(--mint); border-color: #6ee7a055; }
 .tags { display: flex; flex-wrap: wrap; gap: var(--s1); margin-top: var(--s1); }
 

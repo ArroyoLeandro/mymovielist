@@ -10,6 +10,9 @@ use PDOException;
 /** All SQL lives here. Portable across MySQL and SQLite. */
 final class Repository
 {
+    /** Shortest version key (letters and digits) that may link two titles, see versionKeys(). */
+    private const VERSION_MIN_KEY = 4;
+
     private PDO $pdo;
 
     public function __construct(PDO $pdo)
@@ -115,7 +118,7 @@ final class Repository
         )->fetchAll();
 
         $movies = $this->run(
-            "SELECT m.id, m.section_id, m.title, m.original_title, m.year, m.release_date, m.poster_url, m.media_type, m.tmdb_id,
+            "SELECT m.id, m.section_id, m.title, m.original_title, m.year, m.release_date, m.poster_url, m.media_type, m.animated, m.tmdb_id,
                     m.providers_link, c.slug AS collection_slug, c.name AS collection_name, c.poster_url AS collection_poster,
                     CASE WHEN m.source = 'manual' THEN ab.tag END AS added_by_tag
              FROM movies m
@@ -151,6 +154,7 @@ final class Repository
                 'year' => (int) $m['year'],
                 'posterUrl' => $m['poster_url'],
                 'mediaType' => $m['media_type'],
+                'animated' => self::flag($m['animated']),
                 'tmdbId' => $m['tmdb_id'] === null ? null : (int) $m['tmdb_id'],
                 'collection' => $m['collection_slug'] === null ? null : ['slug' => $m['collection_slug'], 'name' => $m['collection_name']],
                 'providers' => $pmap[(int) $m['id']] ?? [],
@@ -563,7 +567,7 @@ final class Repository
     public function userList(array $user): array
     {
         $rows = $this->run(
-            "SELECT m.id, m.title, m.original_title, m.year, m.poster_url, m.media_type, m.providers_link, e.score, e.watched_at,
+            "SELECT m.id, m.title, m.original_title, m.year, m.poster_url, m.media_type, m.animated, m.providers_link, e.score, e.watched_at,
                     sec.slug AS section_slug, sec.name AS section_name,
                     s.slug AS studio_slug, s.name AS studio_name, s.logo_url,
                     CASE WHEN m.source = 'manual' THEN ab.tag END AS added_by_tag
@@ -608,6 +612,7 @@ final class Repository
                     'year' => (int) $r['year'],
                     'posterUrl' => $r['poster_url'],
                     'mediaType' => $r['media_type'],
+                    'animated' => self::flag($r['animated']),
                     'studio' => ['slug' => $r['studio_slug'], 'name' => $r['studio_name']],
                     'section' => ['slug' => $r['section_slug'], 'name' => $r['section_name']],
                     'providers' => $pmap[(int) $r['id']] ?? [],
@@ -810,7 +815,7 @@ final class Repository
 
     // ---- global catalog: home rows, filtered titles, search ----
 
-    private const TITLE_COLS = "m.id, m.title, m.original_title, m.year, m.poster_url, m.media_type, m.tmdb_id, m.providers_link,
+    private const TITLE_COLS = "m.id, m.title, m.original_title, m.year, m.poster_url, m.media_type, m.animated, m.tmdb_id, m.providers_link,
         sec.slug AS section_slug, sec.name AS section_name, s.slug AS studio_slug, s.name AS studio_name, s.kind AS studio_kind,
         CASE WHEN m.source = 'manual' THEN ab.tag END AS added_by_tag";
     private const TITLE_FROM = 'FROM movies m JOIN sections sec ON sec.id = m.section_id JOIN studios s ON s.id = sec.studio_id
@@ -832,6 +837,7 @@ final class Repository
             'year' => (int) $r['year'],
             'posterUrl' => $r['poster_url'],
             'mediaType' => $r['media_type'],
+            'animated' => self::flag($r['animated']),
             'tmdbId' => $r['tmdb_id'] === null ? null : (int) $r['tmdb_id'],
             'studio' => ['slug' => $r['studio_slug'], 'name' => $r['studio_name'], 'kind' => $r['studio_kind']],
             'section' => ['slug' => $r['section_slug'], 'name' => $r['section_name']],
@@ -1261,6 +1267,62 @@ final class Repository
     }
 
     /**
+     * Other versions of a title (remakes, reboots, the series and the movie...): titles whose Spanish or original
+     * title has the same version key as the Spanish or original title of this one. Computed at read time over every
+     * title (a few ms for ~3000 rows), so renames by the weekly sync apply right away. Oldest first.
+     * @return list<array<string, mixed>>|null null when the title does not exist
+     */
+    public function versions(int $id, int $userId): ?array
+    {
+        $all = $this->run('SELECT id, title, original_title FROM movies', [])->fetchAll();
+        $mine = null;
+        foreach ($all as $r) {
+            if ((int) $r['id'] === $id) {
+                $mine = self::versionKeys($r);
+                break;
+            }
+        }
+        if ($mine === null) {
+            return null;
+        }
+        $ids = [];
+        foreach ($all as $r) {
+            if ((int) $r['id'] !== $id && $mine && array_intersect_key($mine, self::versionKeys($r))) {
+                $ids[] = (int) $r['id'];
+            }
+        }
+        if (!$ids) {
+            return [];
+        }
+        $in = implode(',', array_fill(0, count($ids), '?'));
+        return $this->withStates($this->titleQuery('', "m.id IN ($in)", 'm.year, m.id', $ids, count($ids)), $userId);
+    }
+
+    /**
+     * Version keys of a title row (Spanish and original title): folded, letters and digits only, without a leading
+     * article, so "La Bella y la Bestia", "Beauty and the Beast" and "Beauty & the Beast" compare by meaning, not
+     * spelling. Keys under VERSION_MIN_KEY characters are dropped: they are too generic ("Z", "Up", "It").
+     * @param array<string, mixed> $r row with title and original_title
+     * @return array<string, true>
+     */
+    private static function versionKeys(array $r): array
+    {
+        $keys = [];
+        foreach ([$r['title'], $r['original_title']] as $name) {
+            if ($name === null || $name === '') {
+                continue;
+            }
+            $s = (string) preg_replace('/[^\p{L}\p{N}]+/u', ' ', strtr(self::fold((string) $name), ['&' => ' and ']));
+            $s = (string) preg_replace('/^\s*(el|la|los|las|un|una) /', '', $s . ' ');
+            $s = str_replace(' ', '', $s);
+            if ((function_exists('mb_strlen') ? mb_strlen($s, 'UTF-8') : strlen($s)) >= self::VERSION_MIN_KEY) {
+                $keys[$s] = true;
+            }
+        }
+        return $keys;
+    }
+
+    /**
      * Which TMDB titles are already in the catalog.
      * @param list<array{0: string, 1: int}> $refs [media_type ('movie'|'series'), tmdb id]
      * @return array<string, array{id: int, studioSlug: string}> keyed 'movie:<id>' / 'series:<id>'
@@ -1303,6 +1365,12 @@ final class Repository
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($params);
         return $stmt;
+    }
+
+    /** Nullable boolean column (movies.animated: null until the importer has seen the title). @param mixed $value */
+    private static function flag($value): ?bool
+    {
+        return $value === null ? null : (bool) (int) $value;
     }
 
     /** @param mixed $value */

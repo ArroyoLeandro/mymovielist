@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Globe, Search, X } from 'lucide-react'
 import Poster from './Poster'
 import { TmdbList } from './TmdbResults'
+import { titleType } from '../lib/titleType'
 import { useSearch } from '../queries'
 
 /** Few local results: the TMDB action row is promoted (shown before "Ver todos los resultados"). */
@@ -148,7 +149,7 @@ export default function SearchBox() {
                   <Poster url={t.posterUrl} title={t.title} className="thumb" />
                   <span className="info">
                     <strong>{t.title}</strong>
-                    <span className="muted">{t.year}{t.mediaType === 'series' ? ' · Serie' : ''}</span>
+                    <span className="muted">{[t.year, titleType(t)?.label].filter(Boolean).join(' · ')}</span>
                   </span>
                   <span className="search-tags">
                     <span className="tag studio">{t.studio.name}</span>

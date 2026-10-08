@@ -2,6 +2,7 @@ import { memo, useContext, useEffect, useRef, useState } from 'react'
 import { Plus, Check, Bookmark, BookmarkCheck, Send, ChevronRight } from 'lucide-react'
 import type { Availability, RatingRow, TitleSummary } from '../api'
 import { ProviderDictContext } from '../lib/providers'
+import { titleType } from '../lib/titleType'
 import { useTitleActions } from '../lib/useTitleActions'
 import Poster from './Poster'
 import { ProviderStrip } from './Providers'
@@ -10,14 +11,14 @@ import { useTitleDetail } from './TitleDetail'
 
 export type SaveFn = (movieId: number, watched: boolean, score: number | null) => Promise<boolean>
 export type PendingFn = (movieId: number, pending: boolean) => Promise<boolean>
-export type CardMovie = Pick<TitleSummary, 'id' | 'title' | 'originalTitle' | 'year' | 'posterUrl' | 'mediaType'> & {
+export type CardMovie = Pick<TitleSummary, 'id' | 'title' | 'originalTitle' | 'year' | 'posterUrl' | 'mediaType' | 'animated'> & {
   collection?: { slug: string; name: string } | null
   addedBy?: string | null
 } & Partial<Availability>
 
 /**
- * Compact title card: poster with icon actions (watched, wishlist, recommend), title/year, where to watch (logo row)
- * and a one-line group summary.
+ * Compact title card: poster with its type label and icon actions (watched, wishlist, recommend), title/year, where to
+ * watch (logo row) and a one-line group summary.
  * Scoring and the per-friend ratings live in the detail modal (TitleModal), hosted by TitleDetailProvider so it
  * survives the card leaving its list; the card keeps it fed with fresh state while both are on screen.
  */
@@ -32,6 +33,7 @@ const TitleCard = memo(function TitleCard({ movie: m, r, onSave, onPending, labe
   const dict = useContext(ProviderDictContext)
   const [open, setOpen] = useState(false)
   const token = useRef(0)
+  const type = titleType(m)
   const openDetail = () => {
     token.current = detail.open({
       movie: m, r, onSave, onPending, studioName: studioName ?? label, sectionName, dict, onClosed: () => setOpen(false),
@@ -48,7 +50,7 @@ const TitleCard = memo(function TitleCard({ movie: m, r, onSave, onPending, labe
         <Poster url={m.posterUrl} title={m.title} />
         {/* Mouse/touch convenience; keyboard and screen-reader users open the detail from the title or summary. */}
         <button type="button" className="art-open" tabIndex={-1} aria-hidden="true" onClick={openDetail} />
-        {m.mediaType === 'series' && <span className="badge">Serie</span>}
+        {type && <span className={`badge ${type.kind}`}>{type.label}</span>}
         {score !== null && <span className="my-score" title="Tu puntaje">★ {score}</span>}
         <div className="art-actions">
           <button

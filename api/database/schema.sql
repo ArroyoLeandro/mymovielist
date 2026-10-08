@@ -44,6 +44,7 @@ CREATE TABLE movies (
     year SMALLINT NOT NULL,
     release_date DATE NULL,
     media_type ENUM('movie','series') NOT NULL DEFAULT 'movie',
+    animated TINYINT(1) NULL,              -- TMDB genre 16 (Animation); NULL until the importer has seen the title
     tmdb_id INT UNSIGNED NULL,
     vote_count INT UNSIGNED NULL,
     popularity DECIMAL(10,3) NULL,

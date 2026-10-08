@@ -2,19 +2,52 @@ import { useMemo, useRef, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { Bookmark, BookmarkCheck, Check, Eye, Send, Star, X } from 'lucide-react'
-import type { RatingRow } from '../api'
+import type { RatingRow, StateTitle } from '../api'
 import { useDialog } from '../lib/useDialog'
 import { useTitleActions } from '../lib/useTitleActions'
 import { scoreTier as tier } from '../lib/scores'
+import { titleType } from '../lib/titleType'
+import { useVersions } from '../queries'
 import Poster from './Poster'
 import { WhereToWatch } from './Providers'
 import ScoreMeter from './ScoreMeter'
 import type { CardMovie, PendingFn, SaveFn } from './TitleCard'
 
-/** Title detail: the user's own controls first, then where to watch, every viewer's score and quiet group stats. */
-export default function TitleModal({ movie: m, r, me, onSave, onPending, studioName, sectionName, paused, onRecommend, onClose }: {
+/** "Otras versiones": remakes, reboots, the series and the movie... each opens in this modal. Hidden when none. */
+function Versions({ id, onOpen }: { id: number; onOpen: (t: StateTitle) => void }) {
+  const { data } = useVersions(id)
+  if (!data?.length) return null
+  return (
+    <section className="td-versions" aria-labelledby={`td-versions-${id}`}>
+      <h3 id={`td-versions-${id}`}>Otras versiones</h3>
+      <ul>
+        {data.map((v) => {
+          const type = titleType(v)
+          return (
+            <li key={v.id}>
+              <button type="button" className="td-version" onClick={() => onOpen(v)}>
+                <Poster url={v.posterUrl} title={v.title} className="td-version-thumb" />
+                <span className="td-version-info">
+                  <span className="td-version-title">{v.title}</span>
+                  <span className="td-version-meta">{v.year}{type && <> · <span className={`td-version-type ${type.kind}`}>{type.label}</span></>}</span>
+                </span>
+                {v.state.watched ? <span className="tag ok">Vista ✓</span> : v.state.pending ? <span className="tag">Pendiente</span> : null}
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
+}
+
+/** Title detail: the user's own controls first, then where to watch, other versions, every viewer's score and quiet group stats. */
+export default function TitleModal({ movie: m, r, me, onSave, onPending, studioName, sectionName, paused, onRecommend, onOpen, onClose }: {
   movie: CardMovie; r: RatingRow | undefined; me: string; onSave: SaveFn; onPending: PendingFn
-  studioName?: string; sectionName?: string; paused: boolean; onRecommend: () => void; onClose: () => void
+  studioName?: string; sectionName?: string; paused: boolean; onRecommend: () => void
+  /** Opens another title in this modal (other versions). */
+  onOpen: (t: StateTitle) => void
+  onClose: () => void
 }) {
   const { watched, pending, score, failed, toggleWatched, wish, setScore } = useTitleActions(m.id, r, onSave, onPending)
   const dialog = useRef<HTMLDivElement>(null)
@@ -35,6 +68,7 @@ export default function TitleModal({ movie: m, r, me, onSave, onPending, studioN
   const maxDist = Math.max(1, ...dist)
   const scored = dist.reduce((a, b) => a + b, 0)
 
+  const type = titleType(m)
   const bg = m.posterUrl ? ({ '--td-bg': `url(${JSON.stringify(m.posterUrl)})` } as CSSProperties) : undefined
   const count = r?.watchersCount ?? 0
   return createPortal(
@@ -49,7 +83,7 @@ export default function TitleModal({ movie: m, r, me, onSave, onPending, studioN
               {m.originalTitle && <p className="td-orig">{m.originalTitle}</p>}
               <p className="td-year">{m.year}</p>
               <p className="td-tags">
-                <span className={`tag ${m.mediaType === 'series' ? 'series' : ''}`}>{m.mediaType === 'series' ? 'Serie' : 'Película'}</span>
+                <span className={`tag ${type?.kind ?? ''}`}>{type?.label ?? 'Película'}</span>
                 {studioName && <span className="tag studio">{studioName}</span>}
                 {sectionName && <span className="tag">{sectionName}</span>}
                 {m.collection && <span className="tag">Saga: {m.collection.name}</span>}
@@ -90,6 +124,7 @@ export default function TitleModal({ movie: m, r, me, onSave, onPending, studioN
           </section>
 
           <WhereToWatch id={m.id} refs={m.providers} link={m.providersLink} />
+          <Versions id={m.id} onOpen={onOpen} />
 
           <section className="td-people" aria-labelledby={`td-people-${m.id}`}>
             <h3 id={`td-people-${m.id}`}>Quién la vio</h3>

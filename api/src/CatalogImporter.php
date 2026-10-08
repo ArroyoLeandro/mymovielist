@@ -315,7 +315,7 @@ final class CatalogImporter
         $existing = [];
         $stmt = $this->pdo->query(
             'SELECT m.id, m.media_type, m.tmdb_id, m.title, m.original_title, m.year, m.release_date, m.vote_count, m.popularity,
-                    m.collection_id, m.poster_url, m.sort_order, m.section_id, sec.slug AS section_slug, sec.studio_id
+                    m.collection_id, m.poster_url, m.animated, m.sort_order, m.section_id, sec.slug AS section_slug, sec.studio_id
              FROM movies m JOIN sections sec ON sec.id = m.section_id WHERE m.tmdb_id IS NOT NULL'
         );
         foreach ($stmt->fetchAll() as $r) {
@@ -364,15 +364,15 @@ final class CatalogImporter
                         $this->say("  + [{$section['slug']}] $label");
                     }
                     if (!$dry) {
-                        $this->pdo->prepare('INSERT INTO movies (section_id, media_type, tmdb_id, title, original_title, year, release_date, vote_count, popularity, collection_id, poster_url, sort_order, added_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-                            ->execute([$sectionId, $item['media'], $item['tmdb'], $item['title'], $item['original'], $item['year'], $item['date'], $item['votes'], $item['popularity'], $collectionId, $item['poster'], $sort, $now]);
+                        $this->pdo->prepare('INSERT INTO movies (section_id, media_type, tmdb_id, title, original_title, year, release_date, vote_count, popularity, collection_id, poster_url, animated, sort_order, added_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+                            ->execute([$sectionId, $item['media'], $item['tmdb'], $item['title'], $item['original'], $item['year'], $item['date'], $item['votes'], $item['popularity'], $collectionId, $item['poster'], $item['animated'], $sort, $now]);
                     }
                     continue;
                 }
                 $changes = [];
                 $item['collection_id'] = $collectionId;
                 foreach (['title' => 'title', 'original' => 'original_title', 'year' => 'year', 'date' => 'release_date', 'votes' => 'vote_count',
-                          'popularity' => 'popularity', 'collection_id' => 'collection_id', 'poster' => 'poster_url'] as $k => $col) {
+                          'popularity' => 'popularity', 'collection_id' => 'collection_id', 'poster' => 'poster_url', 'animated' => 'animated'] as $k => $col) {
                     if ((string) $item[$k] !== (string) $row[$col]) {
                         $changes[$col] = $item[$k];
                     }
@@ -419,7 +419,7 @@ final class CatalogImporter
         $afterCount = $beforeCount;
         if ($studioId !== false) {
             $q = $this->pdo->prepare(
-                'SELECT m.id, m.title, m.year, m.media_type, m.tmdb_id, m.source, m.release_date, sec.slug AS section_slug
+                'SELECT m.id, m.title, m.year, m.media_type, m.tmdb_id, m.source, m.release_date, m.animated, sec.slug AS section_slug
                  FROM movies m JOIN sections sec ON sec.id = m.section_id WHERE sec.studio_id = ?'
             );
             $q->execute([$studioId]);
@@ -472,6 +472,9 @@ final class CatalogImporter
                 }
             }
             if (!$dry) {
+                $this->fillAnimated(array_values(array_filter($orphans, function ($r) use ($why, $prune, $pruneSkipped) {
+                    return $why($r) !== null || !$prune || $pruneSkipped; // rows that stay
+                })));
                 // Keep vote data fresh on rows that stay although they fell under the threshold; drop emptied sections.
                 foreach ($lowVotes as $k => $v) {
                     [$mt, $tid] = explode(':', $k);
@@ -526,7 +529,49 @@ final class CatalogImporter
             'collection' => $media === 'movie' ? (int) ($d['belongs_to_collection']['id'] ?? 0) : 0,
             'poster' => $poster['url'],
             'poster_country' => $poster['country'],
+            'animated' => self::isAnimated($d),
         ];
+    }
+
+    /** Animated (TMDB genre 16) or live action: 1 / 0 for movies.animated (cards read "Animada" / "Acción real"). */
+    private static function isAnimated(array $d): int
+    {
+        foreach ($d['genres'] ?? [] as $g) {
+            if ((int) ($g['id'] ?? 0) === 16) {
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * Fills movies.animated for this studio's rows the import did not resolve (protected orphans, titles added by
+     * hand): details come from the disk cache when possible. Best effort, the next sync retries what fails.
+     * @param list<array<string, mixed>> $rows orphan rows (id, media_type, tmdb_id, animated)
+     */
+    private function fillAnimated(array $rows): void
+    {
+        $refs = [];
+        foreach ($rows as $r) {
+            if ($r['animated'] === null && $r['tmdb_id'] !== null) {
+                $refs[(int) $r['id']] = ['media' => $r['media_type'] === 'series' ? 'tv' : 'movie', 'id' => (int) $r['tmdb_id']];
+            }
+        }
+        if (!$refs) {
+            return;
+        }
+        try {
+            $details = $this->fetchDetailsMany(array_values($refs));
+        } catch (\RuntimeException $e) {
+            $this->say('WARN: animation flags not filled (' . $e->getMessage() . '), the next sync retries.');
+            return;
+        }
+        $set = $this->pdo->prepare('UPDATE movies SET animated = ? WHERE id = ? AND animated IS NULL');
+        foreach ($refs as $id => $ref) {
+            if (isset($details[$ref['media'] . ':' . $ref['id']])) {
+                $set->execute([self::isAnimated($details[$ref['media'] . ':' . $ref['id']]), $id]);
+            }
+        }
     }
 
     // -----------------------------------------------------------------------------------------------------------
@@ -571,10 +616,10 @@ final class CatalogImporter
         try {
             $this->pdo->prepare(
                 "INSERT INTO movies (section_id, media_type, tmdb_id, title, original_title, year, release_date, vote_count, popularity,
-                                     collection_id, poster_url, sort_order, added_at, source, added_by_user_id)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual', ?)"
+                                     collection_id, poster_url, animated, sort_order, added_at, source, added_by_user_id)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual', ?)"
             )->execute([$sectionId, $item['media'], $item['tmdb'], $item['title'], $item['original'], $item['year'], $item['date'], $item['votes'],
-                $item['popularity'], $collectionId ?: null, $item['poster'], (int) $next->fetchColumn(), date('Y-m-d H:i:s'), $userId]);
+                $item['popularity'], $collectionId ?: null, $item['poster'], $item['animated'], (int) $next->fetchColumn(), date('Y-m-d H:i:s'), $userId]);
         } catch (PDOException $e) {
             $id = $this->titleId($dbMedia, $tmdbId); // lost a race with a concurrent import of the same title
             if ($id === null) {

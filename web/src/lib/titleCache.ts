@@ -38,6 +38,7 @@ export function patchTitle(qc: QueryClient, id: number, fn: StatePatch, studioSl
     return rows.some((r, i) => r !== d.rows[i]) ? { rows } : d
   })
   qc.setQueriesData<StateTitle[]>({ queryKey: ['search'] }, (d) => d && patchItems(d, id, fn))
+  qc.setQueriesData<StateTitle[]>({ queryKey: ['versions'] }, (d) => d && patchItems(d, id, fn))
   if (studioSlug) {
     qc.setQueriesData<RatingRow[]>({ queryKey: ['ratings', studioSlug] }, (rows) =>
       rows && upsertRow(rows, fn(rows.find((r) => r.movieId === id) ?? blankRow(id))))

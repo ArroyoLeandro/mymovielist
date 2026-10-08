@@ -152,6 +152,13 @@ try {
             throw new HttpError(422, 'Invalid cursor: reload the list.', 'bad_cursor');
         }
         Http::json($page);
+    } elseif ($method === 'GET' && preg_match('#^/api/titles/(\d+)/versions$#', $path, $m)) {
+        // Other versions of a title (same Spanish or original title once normalized), with the viewer's state.
+        $versions = $repo->versions((int) $m[1], $current['id']);
+        if ($versions === null) {
+            throw new HttpError(404, 'Title not found.');
+        }
+        Http::json($versions);
     } elseif ($path === '/api/providers' && $method === 'GET') {
         // Static (changes only when bin/refresh-providers.php runs): cacheable. ?used=1 = providers with >= 1 title.
         Http::jsonCached($repo->providers(($_GET['used'] ?? '') === '1'));

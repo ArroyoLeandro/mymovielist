@@ -1,9 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
-import type { ProviderInfo, RatingRow } from '../api'
+import { useQueryClient } from '@tanstack/react-query'
+import { api, type ProviderInfo, type RatingRow, type StateTitle } from '../api'
 import { useAuth } from '../auth'
 import { ProviderDictContext } from '../lib/providers'
 import { blankRow, patchEntry } from '../lib/ratings'
+import { patchTitle, settleAfterAction } from '../lib/titleCache'
 import RecommendModal from './RecommendModal'
 import TitleModal from './TitleModal'
 import type { CardMovie, PendingFn, SaveFn } from './TitleCard'
@@ -23,6 +25,8 @@ interface DetailApi {
   /** Opens the detail; returns the token the card uses to push updates. */
   open: (d: DetailRequest) => number
   update: (token: number, live: DetailLive) => void
+  /** Opens a title that has no card on screen ("Otras versiones"), from its global payload with state. */
+  openTitle: (t: StateTitle) => void
 }
 
 const DetailContext = createContext<DetailApi | null>(null)
@@ -41,6 +45,9 @@ export function useTitleDetail(): DetailApi {
 export function TitleDetailProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const me = user?.tag ?? ''
+  const qc = useQueryClient()
+  const meRef = useRef(me)
+  meRef.current = me
   const [cur, setCur] = useState<(DetailRequest & { token: number }) | null>(null)
   const [own, setOwn] = useState<RatingRow | null>(null)
   const [recommending, setRecommending] = useState(false)
@@ -48,17 +55,47 @@ export function TitleDetailProvider({ children }: { children: ReactNode }) {
   const curRef = useRef(cur)
   curRef.current = cur
 
-  const api = useMemo<DetailApi>(() => ({
-    open: (d) => {
+  const detail = useMemo<DetailApi>(() => {
+    const open = (d: DetailRequest) => {
       curRef.current?.onClosed()
       const token = ++seq.current
       setOwn(null)
       setRecommending(false)
       setCur({ ...d, token })
       return token
-    },
-    update: (token, live) => setCur((c) => (c && c.token === token ? { ...c, ...live } : c)),
-  }), [])
+    }
+    // Without a card, saves go straight to the API and patch the cached lists (and that studio's ratings) in place,
+    // as LiveCard does; the modal's own optimistic copy shows the result.
+    const handlers = (slug: string): Pick<DetailLive, 'onSave' | 'onPending'> => ({
+      onSave: async (id, watched, score) => {
+        try {
+          const entry = await api.saveEntry(id, watched, score)
+          patchTitle(qc, id, (row) => patchEntry(row, meRef.current, entry.watched, entry.score), slug)
+          settleAfterAction(qc)
+          return true
+        } catch {
+          return false
+        }
+      },
+      onPending: async (id, pending) => {
+        try {
+          await api.setPending(id, pending)
+          patchTitle(qc, id, (row) => ({ ...row, pending }), slug)
+          settleAfterAction(qc)
+          return true
+        } catch {
+          return false
+        }
+      },
+    })
+    return {
+      open,
+      update: (token, live) => setCur((c) => (c && c.token === token ? { ...c, ...live } : c)),
+      openTitle: (t) => {
+        open({ movie: t, r: t.state, ...handlers(t.studio.slug), studioName: t.studio.name, sectionName: t.section.name, dict: null, onClosed: () => {} })
+      },
+    }
+  }, [qc])
 
   const close = useCallback(() => {
     const c = curRef.current
@@ -97,7 +134,7 @@ export function TitleDetailProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <DetailContext.Provider value={api}>
+    <DetailContext.Provider value={detail}>
       {children}
       {cur && (
         <ProviderDictContext.Provider value={cur.dict}>
@@ -105,7 +142,7 @@ export function TitleDetailProvider({ children }: { children: ReactNode }) {
             key={cur.token}
             movie={cur.movie} r={r} me={me} onSave={onSave} onPending={onPending}
             studioName={cur.studioName} sectionName={cur.sectionName}
-            paused={recommending} onRecommend={() => setRecommending(true)} onClose={close}
+            paused={recommending} onRecommend={() => setRecommending(true)} onOpen={detail.openTitle} onClose={close}
           />
           {recommending && <RecommendModal movieId={cur.movie.id} title={cur.movie.title} onClose={() => setRecommending(false)} />}
         </ProviderDictContext.Provider>

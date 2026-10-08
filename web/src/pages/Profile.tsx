@@ -12,6 +12,7 @@ import { EmptyState, ErrorState } from '../components/States'
 import Tabs, { type TabItem } from '../components/Tabs'
 import { patchEntry } from '../lib/ratings'
 import { patchTitle, settleAfterAction } from '../lib/titleCache'
+import { titleType } from '../lib/titleType'
 import { useProfile } from '../queries'
 
 type Sort = 'score' | 'title' | 'year' | 'recent'
@@ -34,6 +35,7 @@ const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('es', { day: '
 
 /** One title row: thumb, linked title, tags, plus whatever the tab needs on the right and below. */
 function TitleRow({ m, aside, done = false, children }: { m: TitleSummary; aside?: ReactNode; done?: boolean; children?: ReactNode }) {
+  const type = titleType(m)
   return (
     <li className={done ? 'is-done' : undefined}>
       <Poster url={m.posterUrl} title={m.title} className="thumb" />
@@ -43,7 +45,7 @@ function TitleRow({ m, aside, done = false, children }: { m: TitleSummary; aside
         <span className="tags">
           <span className="tag studio">{m.studio.name}</span>
           <span className="tag">{m.section.name}</span>
-          {m.mediaType === 'series' && <span className="tag series">Serie</span>}
+          {type && <span className={`tag ${type.kind}`}>{type.label}</span>}
         </span>
         {m.providers?.length > 0 && <ProviderStrip refs={m.providers} />}
         {children}

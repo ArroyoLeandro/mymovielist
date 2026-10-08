@@ -15,6 +15,8 @@ export interface Movie {
   year: number
   posterUrl: string | null
   mediaType: 'movie' | 'series'
+  /** TMDB genre Animation; null until the importer has seen the title. */
+  animated?: boolean | null
   tmdbId: number | null
   collection: { slug: string; name: string } | null
   providers: ProviderRef[]
@@ -73,6 +75,8 @@ export interface TitleSummary {
   year: number
   posterUrl: string | null
   mediaType: 'movie' | 'series'
+  /** TMDB genre Animation; null until the importer has seen the title. */
+  animated?: boolean | null
   tmdbId: number | null
   studio: { slug: string; name: string; kind: 'studio' | 'category' }
   section: { slug: string; name: string }
@@ -229,6 +233,8 @@ export const api = {
   },
   providers: () => request<ProviderStat[]>('GET', '/providers?used=1'),
   search: (q: string) => request<StateTitle[]>('GET', `/search?q=${encodeURIComponent(q)}`),
+  /** Other versions of a title (remakes, the series and the movie...), oldest first. */
+  versions: (id: number) => request<StateTitle[]>('GET', `/titles/${id}/versions`),
   setPending: (id: number, pending: boolean) => request<void>(pending ? 'PUT' : 'DELETE', `/movies/${id}/watchlist`),
   recommend: (id: number, toTags: string[], note: string) =>
     request<{ sentTo: string[] }>('POST', `/movies/${id}/recommendations`, { toTags, note: note.trim() || null }),
