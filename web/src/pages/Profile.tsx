@@ -20,6 +20,8 @@ type Kind = 'all' | 'movie' | 'series'
 type Tab = 'vistas' | 'pendientes' | 'recomendadas' | 'mis-recomendaciones'
 /** What an action did to a row in this visit: the row stays in place, marked, until the next visit. */
 type Done = 'watched' | 'removed' | 'deleted'
+/** Row key for `busy` / `done`: titles ("t:<movie id>") and sent recommendations ("r:<id>") never share one. */
+type RowKey = `t:${number}` | `r:${number}`
 
 const SORTS: Record<Sort, (a: ListEntry, b: ListEntry) => number> = {
   score: (a, b) => (b.score ?? -1) - (a.score ?? -1) || a.movie.title.localeCompare(b.movie.title),
@@ -72,7 +74,7 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
   const [kind, setKind] = useState<Kind>('all')
   const [sort, setSort] = useState<Sort>('score')
   const [closed, setClosed] = useState<Set<string>>(new Set())
-  const [busy, setBusy] = useState<number | null>(null)
+  const [busy, setBusy] = useState<RowKey | null>(null)
   const [failed, setFailed] = useState(false)
   // Received recommendations dismissed in this session: hidden right away (optimistic), restored on undo or failure.
   const [hidden, setHidden] = useState<Set<number>>(new Set())
@@ -114,9 +116,9 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
   }
 
   // Rows acted upon in this visit (keyed like `busy`): they stay where they are, marked, until the next visit.
-  const [done, setDone] = useState<Map<number, Done>>(new Map())
+  const [done, setDone] = useState<Map<RowKey, Done>>(new Map())
   // Runs a mutation; the lists are not refetched now (nothing moves under the user), only on their next visit.
-  const act = async (key: number, fn: () => Promise<unknown>, outcome?: Done) => {
+  const act = async (key: RowKey, fn: () => Promise<unknown>, outcome?: Done) => {
     setBusy(key)
     setFailed(false)
     try {
@@ -317,17 +319,17 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
               <TitleRow
                 key={m.id}
                 m={m}
-                done={done.has(m.id)}
+                done={done.has(`t:${m.id}`)}
                 aside={own && (
                   <span className="row-actions">
-                    {done.get(m.id) === 'watched' ? (
+                    {done.get(`t:${m.id}`) === 'watched' ? (
                       <span className="tag ok">Vista ✓</span>
-                    ) : done.get(m.id) === 'removed' ? (
+                    ) : done.get(`t:${m.id}`) === 'removed' ? (
                       <span className="tag muted-tag">Quitada de pendientes</span>
                     ) : (
                       <>
-                        <button type="button" className="btn btn-primary btn-sm" disabled={busy === m.id} onClick={() => void act(m.id, markWatched(m.id), 'watched')}>La vi</button>
-                        <button type="button" className="btn btn-ghost btn-sm" disabled={busy === m.id} onClick={() => void act(m.id, setPending(m.id, false), 'removed')}>Quitar</button>
+                        <button type="button" className="btn btn-primary btn-sm" disabled={busy === `t:${m.id}`} onClick={() => void act(`t:${m.id}`, markWatched(m.id), 'watched')}>La vi</button>
+                        <button type="button" className="btn btn-ghost btn-sm" disabled={busy === `t:${m.id}`} onClick={() => void act(`t:${m.id}`, setPending(m.id, false), 'removed')}>Quitar</button>
                       </>
                     )}
                   </span>
@@ -381,9 +383,9 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
                         {g.pending ? (
                           <span className="tag">En pendientes</span>
                         ) : (
-                          <button type="button" className="btn btn-ghost btn-sm" disabled={busy === g.movie.id} onClick={() => void act(g.movie.id, setPending(g.movie.id, true))}>Quiero verla</button>
+                          <button type="button" className="btn btn-ghost btn-sm" disabled={busy === `t:${g.movie.id}`} onClick={() => void act(`t:${g.movie.id}`, setPending(g.movie.id, true))}>Quiero verla</button>
                         )}
-                        <button type="button" className="btn btn-primary btn-sm" disabled={busy === g.movie.id} onClick={() => void act(g.movie.id, markWatched(g.movie.id))}>La vi</button>
+                        <button type="button" className="btn btn-primary btn-sm" disabled={busy === `t:${g.movie.id}`} onClick={() => void act(`t:${g.movie.id}`, markWatched(g.movie.id))}>La vi</button>
                       </>
                     )}
                     <button
@@ -391,7 +393,7 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
                       className="btn btn-quiet btn-sm reco-dismiss"
                       title="Quitar de mis recomendaciones"
                       aria-label={`Quitar ${g.movie.title} (de ${g.recos.map((r) => `@${r.from}`).join(', ')}) de mis recomendaciones`}
-                      disabled={busy === g.movie.id}
+                      disabled={busy === `t:${g.movie.id}`}
                       onClick={() => dismiss(g.ids, `Quitaste «${g.movie.title}» de tus recomendaciones.`)}
                     >
                       <X size={16} aria-hidden="true" />
@@ -428,7 +430,7 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
                     <TitleRow
                       key={i.id}
                       m={i.movie}
-                      done={done.has(i.id)}
+                      done={done.has(`r:${i.id}`)}
                       aside={
                         <span className="row-actions">
                           {i.watched ? (
@@ -437,10 +439,10 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
                             <span className="tag">Pendiente</span>
                           )}
                           {i.dismissed && <span className="tag muted-tag" title={`@${g.toTag} la quitó de sus recomendaciones`}>Descartada</span>}
-                          {done.get(i.id) === 'deleted' ? (
+                          {done.get(`r:${i.id}`) === 'deleted' ? (
                             <span className="tag muted-tag">Eliminada</span>
                           ) : (
-                            <button type="button" className="btn btn-ghost btn-sm" disabled={busy === i.id} onClick={() => void act(i.id, () => api.deleteRecommendation(i.id), 'deleted')} aria-label={`Eliminar la recomendación de ${i.movie.title} a @${g.toTag}`}>Eliminar</button>
+                            <button type="button" className="btn btn-ghost btn-sm" disabled={busy === `r:${i.id}`} onClick={() => void act(`r:${i.id}`, () => api.deleteRecommendation(i.id), 'deleted')} aria-label={`Eliminar la recomendación de ${i.movie.title} a @${g.toTag}`}>Eliminar</button>
                           )}
                         </span>
                       }
