@@ -936,46 +936,70 @@ final class Repository
     }
 
     /**
-     * Home rows (each at most 20 items, empty rows omitted). Dynamic, per viewer.
+     * Home rows (each at most 20 items, empty rows omitted). Dynamic, per viewer. A title appears in one row only:
+     * the personal rows ("Te recomendaron", "Tus pendientes") claim their titles first, then the others in display
+     * order; a row skips titles already shown above or claimed and backfills from further down its own list.
      * @return array{rows: list<array<string, mixed>>}
      */
     public function home(int $userId): array
     {
-        $rows = [];
-        $titles = function (string $key, string $title, ?string $link, array $raw) use (&$rows, $userId): void {
-            if ($raw) {
-                $rows[] = ['key' => $key, 'title' => $title, 'link' => $link, 'kind' => 'titles', 'items' => $this->withStates($raw, $userId)];
-            }
-        };
+        $size = 20;
         $popular = 'm.popularity DESC, m.vote_count DESC, m.id';
+        // [key, title, "Ver todo" link, query(limit)] in display order; the sagas row goes after 'recommended'.
+        $defs = [
+            // New in the catalog (weekly sync and titles added by hand), newest first: by day, then hand-picked first.
+            ['recent', 'Estrenos y agregadas recientemente', '/catalogo?sort=added', fn(int $n) =>
+                $this->titleQuery('', 'm.added_at >= ?', self::ADDED_ORDER, [date('Y-m-d H:i:s', time() - 30 * 86400)], $n)],
+            ['most-watched', 'Lo más visto del grupo', '/catalogo?sort=group-watched', fn(int $n) =>
+                $this->titleQuery(self::STATS_JOIN, 'w.watchers IS NOT NULL', 'w.watchers DESC, ' . $popular, [], $n)],
+            ['best-rated', 'Mejor puntuadas por el grupo', '/catalogo?sort=score', fn(int $n) =>
+                $this->titleQuery(self::STATS_JOIN, 'w.scored >= 2', 'w.avg_score DESC, w.scored DESC, m.id', [], $n)],
+            ['pending', 'Tus pendientes', '/catalogo?status=pending', fn(int $n) =>
+                $this->titleQuery('JOIN watchlist wl ON wl.movie_id = m.id AND wl.user_id = ?', '', 'wl.added_at DESC, m.id', [$userId], $n)],
+            ['recommended', 'Te recomendaron', '/u/me?tab=recomendadas', fn(int $n) =>
+                $this->titleQuery(
+                    'JOIN (SELECT movie_id, MAX(created_at) AS at FROM recommendations WHERE to_user_id = ? AND dismissed_at IS NULL GROUP BY movie_id) rc ON rc.movie_id = m.id
+                     LEFT JOIN watch_entries mine ON mine.movie_id = m.id AND mine.user_id = ?',
+                    'mine.movie_id IS NULL', 'rc.at DESC, m.id', [$userId, $userId], $n
+                )],
+            ['anime', 'Populares en Anime', '/catalogo?studio=anime&sort=popular', fn(int $n) =>
+                $this->titleQuery('', 's.slug = ?', $popular, ['anime'], $n)],
+            ['series', 'Series populares', '/catalogo?type=series&sort=popular', fn(int $n) =>
+                $this->titleQuery('', "m.media_type = 'series' AND s.slug <> ?", $popular, ['anime'], $n)],
+            ['movies', 'Películas populares', '/catalogo?type=movie&sort=popular', fn(int $n) =>
+                $this->titleQuery('', "m.media_type = 'movie' AND s.slug <> ?", $popular, ['anime'], $n)],
+        ];
+        $claimOrder = ['recommended', 'pending', 'recent', 'most-watched', 'best-rated', 'anime', 'series', 'movies'];
 
-        // New in the catalog (weekly sync and titles added by hand), newest first: by day, then hand-picked first.
-        $titles('recent', 'Estrenos y agregadas recientemente', '/catalogo?sort=added',
-            $this->titleQuery('', 'm.added_at >= ?', self::ADDED_ORDER, [date('Y-m-d H:i:s', time() - 30 * 86400)], 20));
-        $titles('most-watched', 'Lo más visto del grupo', '/catalogo?sort=group-watched',
-            $this->titleQuery(self::STATS_JOIN, 'w.watchers IS NOT NULL', 'w.watchers DESC, ' . $popular, [], 20));
-        $titles('best-rated', 'Mejor puntuadas por el grupo', '/catalogo?sort=score',
-            $this->titleQuery(self::STATS_JOIN, 'w.scored >= 2', 'w.avg_score DESC, w.scored DESC, m.id', [], 20));
-        $titles('pending', 'Tus pendientes', '/catalogo?status=pending',
-            $this->titleQuery('JOIN watchlist wl ON wl.movie_id = m.id AND wl.user_id = ?', '', 'wl.added_at DESC, m.id', [$userId], 20));
-        $titles('recommended', 'Te recomendaron', '/u/me?tab=recomendadas',
-            $this->titleQuery(
-                'JOIN (SELECT movie_id, MAX(created_at) AS at FROM recommendations WHERE to_user_id = ? AND dismissed_at IS NULL GROUP BY movie_id) rc ON rc.movie_id = m.id
-                 LEFT JOIN watch_entries mine ON mine.movie_id = m.id AND mine.user_id = ?',
-                'mine.movie_id IS NULL', 'rc.at DESC, m.id', [$userId, $userId], 20
-            ));
-
-        $sagas = $this->popularSagas($userId);
-        if ($sagas) {
-            $rows[] = ['key' => 'sagas', 'title' => 'Sagas populares', 'link' => null, 'kind' => 'sagas', 'items' => $sagas];
+        $used = [];   // title id => true
+        $picked = []; // row key => raw rows
+        $byKey = array_column($defs, null, 0);
+        foreach ($claimOrder as $key) {
+            // Enough candidates to fill the row even if every title already used is among them.
+            $raw = [];
+            foreach ($byKey[$key][3]($size + count($used)) as $r) {
+                if (count($raw) < $size && !isset($used[(int) $r['id']])) {
+                    $raw[] = $r;
+                }
+            }
+            foreach ($raw as $r) {
+                $used[(int) $r['id']] = true;
+            }
+            $picked[$key] = $raw;
         }
 
-        $titles('anime', 'Populares en Anime', '/catalogo?studio=anime&sort=popular',
-            $this->titleQuery('', 's.slug = ?', $popular, ['anime'], 20));
-        $titles('series', 'Series populares', '/catalogo?type=series&sort=popular',
-            $this->titleQuery('', "m.media_type = 'series' AND s.slug <> ?", $popular, ['anime'], 20));
-        $titles('movies', 'Películas populares', '/catalogo?type=movie&sort=popular',
-            $this->titleQuery('', "m.media_type = 'movie' AND s.slug <> ?", $popular, ['anime'], 20));
+        $rows = [];
+        foreach ($defs as [$key, $title, $link]) {
+            if ($picked[$key]) {
+                $rows[] = ['key' => $key, 'title' => $title, 'link' => $link, 'kind' => 'titles', 'items' => $this->withStates($picked[$key], $userId)];
+            }
+            if ($key === 'recommended') {
+                $sagas = $this->popularSagas($userId);
+                if ($sagas) {
+                    $rows[] = ['key' => 'sagas', 'title' => 'Sagas populares', 'link' => null, 'kind' => 'sagas', 'items' => $sagas];
+                }
+            }
+        }
         return ['rows' => $rows];
     }
 
@@ -1017,9 +1041,10 @@ final class Repository
     }
 
     /**
-     * Paged, filtered titles across all catalogs.
-     * @param array<string, mixed> $f type, studio, decade, status, provider, ptype, sort, q, page
-     * @return array<string, mixed>
+     * Paged, filtered titles across all catalogs, 60 per page; pass the previous page's nextCursor as cursor.
+     * @param array<string, mixed> $f type, studio, decade, status, provider, ptype, sort, q, cursor (page: legacy)
+     * @return array<string, mixed> items, total, page, hasMore, nextCursor (null on the last page)
+     * @throws \InvalidArgumentException on a malformed cursor
      */
     public function titles(int $userId, array $f): array
     {
@@ -1071,20 +1096,110 @@ final class Repository
             $params[] = $like;
             $params[] = $like;
         }
-        $orders = [
-            'year' => 'm.year DESC, m.popularity DESC, m.id',
-            'score' => 'w.avg_score IS NULL, w.avg_score DESC, w.scored DESC, m.popularity DESC, m.id',
-            'group-watched' => 'w.watchers IS NULL, w.watchers DESC, m.popularity DESC, m.id',
-            'title' => 'm.title ASC, m.id',
-            'added' => 'm.added_at IS NULL, ' . self::ADDED_ORDER,
-        ];
-        $order = $orders[(string) ($f['sort'] ?? '')] ?? 'm.popularity DESC, m.vote_count DESC, m.id';
-        $join = strpos($order, 'w.') !== false ? self::STATS_JOIN : '';
+        $sort = isset(self::SORT_KEYS[$f['sort'] ?? '']) ? (string) $f['sort'] : 'popular';
+        $keys = self::SORT_KEYS[$sort];
+        $join = strpos(implode(' ', array_column($keys, 0)), 'w.') !== false ? self::STATS_JOIN : '';
         $cond = implode(' AND ', $where);
-
         $total = (int) $this->run('SELECT COUNT(*) ' . self::TITLE_FROM . ($cond !== '' ? ' WHERE ' . $cond : ''), $params)->fetchColumn();
-        $raw = $this->titleQuery($join, $cond, $order, $params, $size, ($page - 1) * $size);
-        return ['items' => $this->withStates($raw, $userId), 'total' => $total, 'page' => $page, 'hasMore' => $page * $size < $total];
+
+        // Keyset pagination: the cursor holds the sort key of the last row sent, the next page starts strictly after
+        // it. Unlike OFFSET, rows inserted or re-ranked above the cursor (a friend marks a title) never shift the
+        // next page, so a title the client already has is not sent again. (A title whose key drops below the cursor
+        // meanwhile, e.g. a mark removed, can come back on a later page: the web client keeps the first copy.)
+        $cursor = (string) ($f['cursor'] ?? '');
+        $offset = 0;
+        if ($cursor !== '') {
+            $after = self::decodeCursor($cursor, $sort, count($keys));
+            $where[] = self::keysetAfter($keys, $after, $params);
+        } elseif ($page > 1) {
+            $offset = ($page - 1) * $size; // SPA bundles loaded before keyset pagination still send ?page=N
+        }
+        $cond = implode(' AND ', $where);
+        $cols = [];
+        foreach ($keys as $i => [$expr]) {
+            $cols[] = "$expr AS sort_k$i";
+        }
+        $raw = $this->run(
+            'SELECT ' . self::TITLE_COLS . ', ' . implode(', ', $cols) . ' ' . self::TITLE_FROM . ' ' . $join
+            . ($cond !== '' ? ' WHERE ' . $cond : '')
+            . ' ORDER BY ' . implode(', ', array_map(fn(array $k) => $k[0] . ' ' . $k[1], $keys))
+            . ' LIMIT ' . ($size + 1) . ' OFFSET ' . $offset,
+            $params
+        )->fetchAll();
+        $hasMore = count($raw) > $size;
+        $raw = array_slice($raw, 0, $size);
+        $next = null;
+        if ($hasMore) {
+            $last = $raw[count($raw) - 1];
+            $next = self::encodeCursor($sort, array_map(fn(int $i) => $last["sort_k$i"], array_keys($keys)));
+        }
+        return ['items' => $this->withStates($raw, $userId), 'total' => $total, 'page' => $page, 'hasMore' => $hasMore, 'nextCursor' => $next];
+    }
+
+    /**
+     * Sort keys of GET /api/titles: [SQL expression, direction], ending in the unique m.id. Expressions never yield
+     * NULL (the sentinels sort where MySQL puts NULLs), so the keyset comparison and ORDER BY always agree.
+     */
+    private const SORT_KEYS = [
+        'popular' => [['COALESCE(m.popularity, -1)', 'DESC'], ['COALESCE(m.vote_count, -1)', 'DESC'], ['m.id', 'ASC']],
+        'year' => [['m.year', 'DESC'], ['COALESCE(m.popularity, -1)', 'DESC'], ['m.id', 'ASC']],
+        'score' => [['COALESCE(w.avg_score, -1)', 'DESC'], ['COALESCE(w.scored, -1)', 'DESC'], ['COALESCE(m.popularity, -1)', 'DESC'], ['m.id', 'ASC']],
+        'group-watched' => [['COALESCE(w.watchers, 0)', 'DESC'], ['COALESCE(m.popularity, -1)', 'DESC'], ['m.id', 'ASC']],
+        'title' => [['m.title', 'ASC'], ['m.id', 'ASC']],
+        // Same order as ADDED_ORDER (home "recent" row), titles without a date last.
+        'added' => [
+            ['(m.added_at IS NULL)', 'ASC'], ["COALESCE(DATE(m.added_at), '1000-01-01')", 'DESC'], ["(m.source = 'manual')", 'DESC'],
+            ["COALESCE(m.added_at, '1000-01-01 00:00:00')", 'DESC'], ["COALESCE(m.release_date, '1000-01-01')", 'DESC'],
+            ['COALESCE(m.popularity, -1)', 'DESC'], ['m.id', 'ASC'],
+        ],
+    ];
+
+    /**
+     * "Row comes after $values" for a mixed-direction key list, spelled out as OR-ed prefixes (portable, no row
+     * value comparison): k0 beyond v0, or k0 = v0 and k1 beyond v1, ... Appends its parameters to $params.
+     * @param list<array{0: string, 1: string}> $keys
+     * @param list<int|float|string> $values
+     */
+    private static function keysetAfter(array $keys, array $values, array &$params): string
+    {
+        $or = [];
+        foreach ($keys as $i => [$expr, $dir]) {
+            $and = [];
+            for ($j = 0; $j < $i; $j++) {
+                $and[] = $keys[$j][0] . ' = ?';
+                $params[] = $values[$j];
+            }
+            $and[] = $expr . ($dir === 'DESC' ? ' < ?' : ' > ?');
+            $params[] = $values[$i];
+            $or[] = '(' . implode(' AND ', $and) . ')';
+        }
+        return '(' . implode(' OR ', $or) . ')';
+    }
+
+    /** Opaque cursor: base64url JSON {s: sort, k: sort key values of the last row}. */
+    private static function encodeCursor(string $sort, array $values): string
+    {
+        return rtrim(strtr(base64_encode((string) json_encode(['s' => $sort, 'k' => $values])), '+/', '-_'), '=');
+    }
+
+    /**
+     * @return list<int|float|string>
+     * @throws \InvalidArgumentException when the cursor is malformed or belongs to another sort
+     */
+    private static function decodeCursor(string $cursor, string $sort, int $count): array
+    {
+        $json = strlen($cursor) <= 2000 ? base64_decode(strtr($cursor, '-_', '+/'), true) : false;
+        $data = $json === false ? null : json_decode($json, true);
+        $values = is_array($data) && ($data['s'] ?? null) === $sort && is_array($data['k'] ?? null) ? $data['k'] : null;
+        if ($values === null || array_keys($values) !== range(0, $count - 1)) {
+            throw new \InvalidArgumentException('Invalid cursor.');
+        }
+        foreach ($values as $v) {
+            if (!is_int($v) && !is_float($v) && !is_string($v)) {
+                throw new \InvalidArgumentException('Invalid cursor.');
+            }
+        }
+        return $values;
     }
 
     /** Lowercase and strip accents so "Señor" and "senor" compare equal. */
