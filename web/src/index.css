@@ -572,6 +572,8 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
 .info { display: grid; min-width: 0; }
 .info strong { font-weight: 600; }
 .row-title { font-weight: 600; text-decoration: none; overflow-wrap: anywhere; }
+button.row-title { justify-self: start; padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.thumb-btn { display: block; padding: 0; border: 0; background: none; cursor: pointer; }
 .row-title:hover { text-decoration: underline; }
 .row-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; }
 .score-pill { min-width: 44px; padding: 4px 10px; border-radius: var(--r-pill); text-align: center; background: var(--gold); color: var(--gold-ink); font-weight: 800; }

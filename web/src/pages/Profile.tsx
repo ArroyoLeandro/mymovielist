@@ -1,5 +1,5 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { api, type ListEntry, type Profile as ProfileData, type Recommended, type TitleSummary } from '../api'
 import { useAuth } from '../auth'
@@ -9,9 +9,11 @@ import StudioLogo from '../components/StudioLogo'
 import { Bookmark, Eye, Inbox, Send, X } from 'lucide-react'
 import { ProfileSkeleton } from '../components/Skeleton'
 import { EmptyState, ErrorState } from '../components/States'
+import { useTitleDetail } from '../components/TitleDetail'
 import Tabs, { type TabItem } from '../components/Tabs'
-import { patchEntry } from '../lib/ratings'
+import { blankRow, patchEntry } from '../lib/ratings'
 import { patchTitle, settleAfterAction } from '../lib/titleCache'
+import { toast } from '../lib/toast'
 import { titleType } from '../lib/titleType'
 import { useProfile } from '../queries'
 
@@ -35,14 +37,37 @@ const UNDO_MS = 5000
 
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })
 
-/** One title row: thumb, linked title, tags, plus whatever the tab needs on the right and below. */
+/**
+ * Opens the title modal in place (no navigation to the catalog). The profile payload has no per-user state, so the
+ * title's row comes from its studio ratings (the same cache the studio page uses) before the modal opens.
+ */
+function useOpenTitle() {
+  const qc = useQueryClient()
+  const detail = useTitleDetail()
+  const seq = useRef(0)
+  return useCallback(async (m: TitleSummary) => {
+    const token = ++seq.current
+    try {
+      const rows = await qc.fetchQuery({ queryKey: ['ratings', m.studio.slug], queryFn: () => api.ratings(m.studio.slug), staleTime: 30_000 })
+      if (token !== seq.current) return // a later click won
+      detail.openTitle({ ...m, state: rows.find((r) => r.movieId === m.id) ?? blankRow(m.id) })
+    } catch {
+      if (token === seq.current) toast({ tone: 'error', text: `No se pudo abrir “${m.title}”. Inténtalo de nuevo.` })
+    }
+  }, [qc, detail])
+}
+
+/** One title row: thumb, title (both open the title modal), tags, plus whatever the tab needs on the right and below. */
 function TitleRow({ m, aside, done = false, children }: { m: TitleSummary; aside?: ReactNode; done?: boolean; children?: ReactNode }) {
   const type = titleType(m)
+  const openTitle = useOpenTitle()
   return (
     <li className={done ? 'is-done' : undefined}>
-      <Poster url={m.posterUrl} title={m.title} className="thumb" />
+      <button type="button" className="thumb-btn" tabIndex={-1} aria-hidden="true" onClick={() => void openTitle(m)}>
+        <Poster url={m.posterUrl} title={m.title} className="thumb" />
+      </button>
       <div className="info">
-        <Link to={`/studio/${m.studio.slug}?t=${m.id}`} className="row-title">{m.title}</Link>
+        <button type="button" className="row-title" onClick={() => void openTitle(m)}>{m.title}</button>
         <span className="muted">{m.year}</span>
         <span className="tags">
           <span className="tag studio">{m.studio.name}</span>
