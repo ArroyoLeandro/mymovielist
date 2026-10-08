@@ -11,5 +11,6 @@ return [
     'site_password_hash' => '$2y$10$replace.with.output.of.bin/hash-password.php',
     'session_name' => 'disney_session',
     // Only needed by bin/import-tmdb.php (CLI). Use either the v3 api_key or the v4 read_token (bearer).
-    'tmdb' => ['api_key' => '', 'read_token' => '', 'ca_bundle' => ''], // ca_bundle: optional path to a CA file (PHP on Windows)
+    // watch_country: ISO 3166-1 country for "where to watch" (bin/refresh-providers.php), default 'AR'.
+    'tmdb' => ['api_key' => '', 'read_token' => '', 'ca_bundle' => '', 'watch_country' => 'AR'], // ca_bundle: optional path to a CA file (PHP on Windows)
 ];

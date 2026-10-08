@@ -116,7 +116,7 @@ final class Repository
 
         $movies = $this->run(
             'SELECT m.id, m.section_id, m.title, m.original_title, m.year, m.release_date, m.poster_url, m.media_type, m.tmdb_id,
-                    c.slug AS collection_slug, c.name AS collection_name, c.poster_url AS collection_poster
+                    m.providers_link, c.slug AS collection_slug, c.name AS collection_name, c.poster_url AS collection_poster
              FROM movies m
              JOIN sections sec ON sec.id = m.section_id
              LEFT JOIN collections c ON c.id = m.collection_id
@@ -124,6 +124,20 @@ final class Repository
              ORDER BY m.sort_order, m.id',
             [$studioId]
         )->fetchAll();
+
+        $pmap = self::groupProviders($this->run(
+            'SELECT tp.title_id, tp.provider_id, tp.type FROM title_providers tp
+             JOIN movies m ON m.id = tp.title_id JOIN sections sec ON sec.id = m.section_id
+             WHERE sec.studio_id = ?
+             ORDER BY tp.title_id, tp.type, tp.display_priority, tp.provider_id',
+            [$studioId]
+        )->fetchAll());
+        $used = [];
+        foreach ($pmap as $list) {
+            foreach ($list as $p) {
+                $used[] = $p['id'];
+            }
+        }
 
         $bySection = [];
         $groups = []; // collection slug => saga being built
@@ -137,6 +151,8 @@ final class Repository
                 'mediaType' => $m['media_type'],
                 'tmdbId' => $m['tmdb_id'] === null ? null : (int) $m['tmdb_id'],
                 'collection' => $m['collection_slug'] === null ? null : ['slug' => $m['collection_slug'], 'name' => $m['collection_name']],
+                'providers' => $pmap[(int) $m['id']] ?? [],
+                'providersLink' => $m['providers_link'],
             ];
             if ($m['collection_slug'] !== null) {
                 $date = $m['release_date'] ?: sprintf('%04d-01-01', (int) $m['year']);
@@ -175,6 +191,7 @@ final class Repository
                 'movies' => $bySection[$s['id']] ?? [],
             ], $sections),
             'sagas' => array_map(fn(array $x) => $x['saga'], $sagas),
+            'providers' => $this->providerDictionary($used),
         ];
     }
 
@@ -543,7 +560,7 @@ final class Repository
     public function userList(array $user): array
     {
         $rows = $this->run(
-            'SELECT m.id, m.title, m.original_title, m.year, m.poster_url, m.media_type, e.score, e.watched_at,
+            'SELECT m.id, m.title, m.original_title, m.year, m.poster_url, m.media_type, m.providers_link, e.score, e.watched_at,
                     sec.slug AS section_slug, sec.name AS section_name,
                     s.slug AS studio_slug, s.name AS studio_name, s.logo_url
              FROM watch_entries e
@@ -555,6 +572,7 @@ final class Repository
             [$user['id']]
         )->fetchAll();
 
+        $pmap = $this->providerMap(array_column($rows, 'id'));
         $distribution = array_fill(1, 10, 0);
         $sum = 0;
         $scored = 0;
@@ -587,6 +605,8 @@ final class Repository
                     'mediaType' => $r['media_type'],
                     'studio' => ['slug' => $r['studio_slug'], 'name' => $r['studio_name']],
                     'section' => ['slug' => $r['section_slug'], 'name' => $r['section_name']],
+                    'providers' => $pmap[(int) $r['id']] ?? [],
+                    'providersLink' => $r['providers_link'],
                 ],
                 'score' => $score,
                 'watchedAt' => self::iso($r['watched_at']),
@@ -701,28 +721,22 @@ final class Repository
     {
         $out = $this->userList($user);
 
+        $pending = $this->run(
+            'SELECT ' . self::TITLE_COLS . ', wl.added_at ' . self::TITLE_FROM . '
+             JOIN watchlist wl ON wl.movie_id = m.id WHERE wl.user_id = ? ORDER BY wl.added_at DESC, m.id',
+            [$user['id']]
+        )->fetchAll();
+        $pmap = $this->providerMap(array_column($pending, 'id'));
         $out['pending'] = array_map(
-            fn(array $r) => self::titleRow($r) + ['addedAt' => self::iso($r['added_at'])],
-            $this->run(
-                'SELECT ' . self::TITLE_COLS . ', wl.added_at ' . self::TITLE_FROM . '
-                 JOIN watchlist wl ON wl.movie_id = m.id WHERE wl.user_id = ? ORDER BY wl.added_at DESC, m.id',
-                [$user['id']]
-            )->fetchAll()
+            fn(array $r) => self::titleRow($r, $pmap) + ['addedAt' => self::iso($r['added_at'])],
+            $pending
         );
 
         if ($user['id'] !== $viewerId) {
             return $out;
         }
 
-        $out['recommendedToMe'] = array_map(fn(array $r) => [
-            'id' => (int) $r['reco_id'],
-            'movie' => self::titleRow($r),
-            'from' => $r['from_tag'],
-            'note' => $r['note'],
-            'createdAt' => self::iso($r['created_at']),
-            'watched' => $r['mine_movie'] !== null,
-            'pending' => $r['pend_movie'] !== null,
-        ], $this->run(
+        $toMe = $this->run(
             'SELECT ' . self::TITLE_COLS . ', r.id AS reco_id, r.note, r.created_at, f.tag AS from_tag,
                     mine.movie_id AS mine_movie, pend.movie_id AS pend_movie ' . self::TITLE_FROM . '
              JOIN recommendations r ON r.movie_id = m.id AND r.to_user_id = ?
@@ -731,10 +745,8 @@ final class Repository
              LEFT JOIN watchlist pend ON pend.movie_id = m.id AND pend.user_id = r.to_user_id
              ORDER BY r.created_at DESC, r.id DESC',
             [$user['id']]
-        )->fetchAll());
-
-        $groups = [];
-        foreach ($this->run(
+        )->fetchAll();
+        $mine = $this->run(
             'SELECT ' . self::TITLE_COLS . ', r.id AS reco_id, r.note, r.created_at, t.tag AS to_tag, t.tag_normalized AS to_norm,
                     theirs.movie_id AS seen_movie, theirs.score AS their_score ' . self::TITLE_FROM . '
              JOIN recommendations r ON r.movie_id = m.id AND r.from_user_id = ?
@@ -742,11 +754,25 @@ final class Repository
              LEFT JOIN watch_entries theirs ON theirs.movie_id = m.id AND theirs.user_id = r.to_user_id
              ORDER BY t.tag_normalized, r.created_at DESC, r.id DESC',
             [$user['id']]
-        )->fetchAll() as $r) {
+        )->fetchAll();
+        $pmap = $this->providerMap(array_merge(array_column($toMe, 'id'), array_column($mine, 'id')));
+
+        $out['recommendedToMe'] = array_map(fn(array $r) => [
+            'id' => (int) $r['reco_id'],
+            'movie' => self::titleRow($r, $pmap),
+            'from' => $r['from_tag'],
+            'note' => $r['note'],
+            'createdAt' => self::iso($r['created_at']),
+            'watched' => $r['mine_movie'] !== null,
+            'pending' => $r['pend_movie'] !== null,
+        ], $toMe);
+
+        $groups = [];
+        foreach ($mine as $r) {
             $groups[$r['to_norm']]['toTag'] = $r['to_tag'];
             $groups[$r['to_norm']]['items'][] = [
                 'id' => (int) $r['reco_id'],
-                'movie' => self::titleRow($r),
+                'movie' => self::titleRow($r, $pmap),
                 'note' => $r['note'],
                 'createdAt' => self::iso($r['created_at']),
                 'watched' => $r['seen_movie'] !== null,
@@ -759,14 +785,17 @@ final class Repository
 
     // ---- global catalog: home rows, filtered titles, search ----
 
-    private const TITLE_COLS = 'm.id, m.title, m.original_title, m.year, m.poster_url, m.media_type, m.tmdb_id,
+    private const TITLE_COLS = 'm.id, m.title, m.original_title, m.year, m.poster_url, m.media_type, m.tmdb_id, m.providers_link,
         sec.slug AS section_slug, sec.name AS section_name, s.slug AS studio_slug, s.name AS studio_name, s.kind AS studio_kind';
     private const TITLE_FROM = 'FROM movies m JOIN sections sec ON sec.id = m.section_id JOIN studios s ON s.id = sec.studio_id';
     private const STATS_JOIN = 'LEFT JOIN (SELECT movie_id, COUNT(*) AS watchers, AVG(score) AS avg_score, COUNT(score) AS scored
                                             FROM watch_entries GROUP BY movie_id) w ON w.movie_id = m.id';
 
-    /** @return array<string, mixed> */
-    private static function titleRow(array $r): array
+    /**
+     * @param array<int, list<array{id: int, type: string}>> $pmap from providerMap()
+     * @return array<string, mixed>
+     */
+    private static function titleRow(array $r, array $pmap): array
     {
         return [
             'id' => (int) $r['id'],
@@ -778,6 +807,8 @@ final class Repository
             'tmdbId' => $r['tmdb_id'] === null ? null : (int) $r['tmdb_id'],
             'studio' => ['slug' => $r['studio_slug'], 'name' => $r['studio_name'], 'kind' => $r['studio_kind']],
             'section' => ['slug' => $r['section_slug'], 'name' => $r['section_name']],
+            'providers' => $pmap[(int) $r['id']] ?? [],
+            'providersLink' => $r['providers_link'],
         ];
     }
 
@@ -788,8 +819,83 @@ final class Repository
      */
     private function withStates(array $rows, int $userId): array
     {
-        $states = $this->titleStates(array_map(fn(array $r) => (int) $r['id'], $rows), $userId);
-        return array_map(fn(array $r) => self::titleRow($r) + ['state' => $states[(int) $r['id']]], $rows);
+        $ids = array_map(fn(array $r) => (int) $r['id'], $rows);
+        $states = $this->titleStates($ids, $userId);
+        $pmap = $this->providerMap($ids);
+        return array_map(fn(array $r) => self::titleRow($r, $pmap) + ['state' => $states[(int) $r['id']]], $rows);
+    }
+
+    // ---- where to watch (TMDB watch providers, one country) ----
+
+    /**
+     * Compact providers per title, ordered by type (flatrate, free, ads, rent, buy) then TMDB display priority.
+     * @param list<int|string> $ids
+     * @return array<int, list<array{id: int, type: string}>>
+     */
+    private function providerMap(array $ids): array
+    {
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        if (!$ids) {
+            return [];
+        }
+        $in = implode(',', array_fill(0, count($ids), '?'));
+        return self::groupProviders($this->run(
+            "SELECT title_id, provider_id, type FROM title_providers WHERE title_id IN ($in)
+             ORDER BY title_id, type, display_priority, provider_id",
+            $ids
+        )->fetchAll());
+    }
+
+    /** @return array<int, list<array{id: int, type: string}>> */
+    private static function groupProviders(array $rows): array
+    {
+        $map = [];
+        foreach ($rows as $r) {
+            $map[(int) $r['title_id']][] = ['id' => (int) $r['provider_id'], 'type' => $r['type']];
+        }
+        return $map;
+    }
+
+    /**
+     * Providers dictionary keyed by id (a JSON object, also when empty).
+     * @param list<int> $ids
+     */
+    private function providerDictionary(array $ids): object
+    {
+        $ids = array_values(array_unique($ids));
+        $dict = [];
+        if ($ids) {
+            $in = implode(',', array_fill(0, count($ids), '?'));
+            foreach ($this->run("SELECT id, name, logo_url FROM providers WHERE id IN ($in) ORDER BY id", $ids)->fetchAll() as $p) {
+                $dict[(string) $p['id']] = ['name' => $p['name'], 'logoUrl' => $p['logo_url']];
+            }
+        }
+        return (object) $dict;
+    }
+
+    /**
+     * All providers (static): title counts overall and for subscription (flatrate/free/ads), most used first.
+     * With $usedOnly, only providers that have at least one title.
+     * @return list<array<string, mixed>>
+     */
+    public function providers(bool $usedOnly): array
+    {
+        $rows = $this->run(
+            "SELECT p.id, p.name, p.logo_url, p.display_priority, COUNT(DISTINCT tp.title_id) AS n,
+                    COUNT(DISTINCT CASE WHEN tp.type IN ('flatrate', 'free', 'ads') THEN tp.title_id END) AS n_flat
+             FROM providers p LEFT JOIN title_providers tp ON tp.provider_id = p.id
+             GROUP BY p.id, p.name, p.logo_url, p.display_priority
+             " . ($usedOnly ? 'HAVING COUNT(tp.title_id) > 0' : '') . '
+             ORDER BY n DESC, p.display_priority, p.name',
+            []
+        )->fetchAll();
+        return array_map(fn(array $r) => [
+            'id' => (int) $r['id'],
+            'name' => $r['name'],
+            'logoUrl' => $r['logo_url'],
+            'titleCount' => (int) $r['n'],
+            'flatrateCount' => (int) $r['n_flat'],
+        ], $rows);
     }
 
     /** @return list<array<string, mixed>> raw rows; $params are in SQL order (join, where) */
@@ -880,7 +986,7 @@ final class Repository
 
     /**
      * Paged, filtered titles across all catalogs.
-     * @param array<string, mixed> $f type, studio, decade, status, sort, q, page
+     * @param array<string, mixed> $f type, studio, decade, status, provider, ptype, sort, q, page
      * @return array<string, mixed>
      */
     public function titles(int $userId, array $f): array
@@ -909,6 +1015,22 @@ final class Repository
         } elseif ($status === 'pending') {
             $where[] = 'EXISTS (SELECT 1 FROM watchlist x WHERE x.movie_id = m.id AND x.user_id = ?)';
             $params[] = $userId;
+        }
+        // Where to watch: provider=<id>[,<id>] and/or ptype=flatrate|rent|buy|any (flatrate also matches free and ads).
+        $providerIds = array_values(array_unique(array_filter(array_map('intval', explode(',', (string) ($f['provider'] ?? ''))), fn(int $i) => $i > 0)));
+        $ptypes = ['flatrate' => ['flatrate', 'free', 'ads'], 'rent' => ['rent'], 'buy' => ['buy'], 'any' => []];
+        $ptype = (string) ($f['ptype'] ?? '');
+        if ($providerIds || isset($ptypes[$ptype])) {
+            $sub = 'SELECT 1 FROM title_providers tp WHERE tp.title_id = m.id';
+            if ($providerIds) {
+                $sub .= ' AND tp.provider_id IN (' . implode(',', array_fill(0, count($providerIds), '?')) . ')';
+                array_push($params, ...$providerIds);
+            }
+            if ($ptypes[$ptype] ?? []) {
+                $sub .= ' AND tp.type IN (' . implode(',', array_fill(0, count($ptypes[$ptype]), '?')) . ')';
+                array_push($params, ...$ptypes[$ptype]);
+            }
+            $where[] = "EXISTS ($sub)";
         }
         $q = trim((string) ($f['q'] ?? ''));
         if ($q !== '') {

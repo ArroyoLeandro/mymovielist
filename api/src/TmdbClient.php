@@ -25,6 +25,8 @@ final class TmdbClient
     private $last = 0.0;
     /** @var int */
     public $requests = 0;
+    /** @var resource|\CurlHandle|null reused between requests (keep-alive: no new TLS handshake per call) */
+    private $ch = null;
 
     public function __construct(string $apiKey, string $readToken, ?string $cacheDir, string $caBundle = '')
     {
@@ -86,8 +88,14 @@ final class TmdbClient
             $this->last = microtime(true);
             $this->requests++;
 
-            $ch = curl_init($url);
+            if ($this->ch === null) {
+                $this->ch = curl_init();
+            } else {
+                curl_reset($this->ch);
+            }
+            $ch = $this->ch;
             curl_setopt_array($ch, [
+                CURLOPT_URL => $url,
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_HEADER => true,
                 CURLOPT_TIMEOUT => 30,
@@ -98,7 +106,6 @@ final class TmdbClient
             $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
             $headerSize = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
             $error = curl_error($ch);
-            curl_close($ch);
 
             if ($raw === false) {
                 if ($attempt < 5) {

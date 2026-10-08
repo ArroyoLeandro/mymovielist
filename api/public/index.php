@@ -117,12 +117,15 @@ try {
         Http::json($repo->home($current['id']));
     } elseif ($path === '/api/titles' && $method === 'GET') {
         $f = [];
-        foreach (['type', 'studio', 'status', 'sort', 'q'] as $k) {
+        foreach (['type', 'studio', 'status', 'provider', 'ptype', 'sort', 'q'] as $k) {
             $f[$k] = isset($_GET[$k]) && is_string($_GET[$k]) ? $_GET[$k] : '';
         }
         $f['decade'] = isset($_GET['decade']) ? (int) $_GET['decade'] : 0;
         $f['page'] = isset($_GET['page']) ? (int) $_GET['page'] : 1;
         Http::json($repo->titles($current['id'], $f));
+    } elseif ($path === '/api/providers' && $method === 'GET') {
+        // Static (changes only when bin/refresh-providers.php runs): cacheable. ?used=1 = providers with >= 1 title.
+        Http::jsonCached($repo->providers(($_GET['used'] ?? '') === '1'));
     } elseif ($path === '/api/search' && $method === 'GET') {
         $q = isset($_GET['q']) && is_string($_GET['q']) ? $_GET['q'] : '';
         Http::json($repo->search($q, $current['id']));

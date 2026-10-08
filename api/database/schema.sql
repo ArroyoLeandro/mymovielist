@@ -50,6 +50,8 @@ CREATE TABLE movies (
     collection_id INT UNSIGNED NULL,
     wiki_title VARCHAR(200) NULL,
     poster_url VARCHAR(500) NULL,
+    providers_link VARCHAR(500) NULL,
+    providers_updated_at DATETIME NULL,
     sort_order INT NOT NULL DEFAULT 0,
     PRIMARY KEY (id),
     KEY idx_movies_section (section_id, sort_order),
@@ -106,4 +108,25 @@ CREATE TABLE recommendations (
     CONSTRAINT fk_reco_from FOREIGN KEY (from_user_id) REFERENCES users (id) ON DELETE CASCADE,
     CONSTRAINT fk_reco_to FOREIGN KEY (to_user_id) REFERENCES users (id) ON DELETE CASCADE,
     CONSTRAINT fk_reco_movie FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Where to watch (TMDB watch providers for one country, filled by bin/refresh-providers.php).
+-- `title_id`, not `movie_id`: provider rows are catalog data and must never protect a title from the importer's prune.
+CREATE TABLE providers (
+    id INT UNSIGNED NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    logo_url VARCHAR(500) NULL,
+    display_priority INT NOT NULL DEFAULT 0,
+    PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE title_providers (
+    title_id INT UNSIGNED NOT NULL,
+    provider_id INT UNSIGNED NOT NULL,
+    type ENUM('flatrate','free','ads','rent','buy') NOT NULL,
+    display_priority INT NOT NULL DEFAULT 0,
+    PRIMARY KEY (title_id, provider_id, type),
+    KEY idx_title_providers_provider (provider_id, type, title_id),
+    CONSTRAINT fk_title_providers_title FOREIGN KEY (title_id) REFERENCES movies (id) ON DELETE CASCADE,
+    CONSTRAINT fk_title_providers_provider FOREIGN KEY (provider_id) REFERENCES providers (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

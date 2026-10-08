@@ -442,15 +442,20 @@ function importStudio(PDO $pdo, TmdbClient $tmdb, string $slug, array $opts, boo
     }
 }
 
-/** @return array<int, true> ids of movies referenced by another table (any movie_id column or FK to movies.id). */
+/**
+ * @return array<int, true> ids of movies referenced by user data: any other table with a movie_id column or an FK to
+ * movies.id, except catalog tables (title_providers is refreshed from TMDB and must never protect a title).
+ */
 function referencedMovieIds(PDO $pdo): array
 {
     $tables = [];
+    $catalog = "'movies', 'title_providers'";
     $q = "SELECT table_name AS t, column_name AS c FROM information_schema.columns
-          WHERE table_schema = DATABASE() AND column_name = 'movie_id' AND table_name <> 'movies'
+          WHERE table_schema = DATABASE() AND column_name = 'movie_id' AND table_name NOT IN ($catalog)
           UNION
           SELECT table_name, column_name FROM information_schema.key_column_usage
-          WHERE table_schema = DATABASE() AND referenced_table_name = 'movies' AND referenced_column_name = 'id'";
+          WHERE table_schema = DATABASE() AND referenced_table_name = 'movies' AND referenced_column_name = 'id'
+            AND table_name NOT IN ($catalog)";
     foreach ($pdo->query($q)->fetchAll() as $r) {
         $tables[$r['t'] . '.' . $r['c']] = [$r['t'], $r['c']];
     }

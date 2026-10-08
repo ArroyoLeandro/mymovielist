@@ -95,3 +95,29 @@ Spanish saga names: the importer asks TMDB for the es-MX collection name (then a
 ### Watchlist and recommendations (migration 005)
 
 Apply `api/database/migrations/005_watchlist_recommendations.sql` once (creates `watchlist` and `recommendations`; additive and re-runnable, no data is touched). Both tables keep a `movie_id` column, so the importer's `--prune` never removes a pending or recommended title. Deploy order on production: back up, apply 004 (if pending) and 005, upload the new `api/` and `web` build. The new endpoints (`/api/home`, `/api/titles`, `/api/search`, `/api/users`, `/api/users/{tag}/profile`, watchlist and recommendations) replace `/api/users/{tag}/list`.
+
+### Where to watch in Argentina (migration 006)
+
+Streaming/rent/buy availability comes from TMDB watch providers (data by JustWatch) for one country: `tmdb.watch_country` in `config.php`, default `AR`. Apply `api/database/migrations/006_watch_providers.sql` once (creates `providers` and `title_providers`, adds `movies.providers_link` and `movies.providers_updated_at`; additive and re-runnable). `title_providers` uses a `title_id` column on purpose and is excluded by name from the importer's protection check: provider rows never keep a title from being pruned, and pruning a title deletes its provider rows (cascade).
+
+```bash
+cd api
+php bin/refresh-providers.php --dry-run --limit=20   # preview, nothing written
+php bin/refresh-providers.php                        # titles never fetched or older than 7 days (all ~2600 on the first run, ~10 min)
+```
+
+Flags: `--country=AR`, `--stale-days=7` (0 = every title), `--limit=N`, `--studio=<slug>`, `--dry-run`, `--verbose`. No response cache (providers change weekly). A title without data for the country gets no rows but its timestamp is set, so it is retried only when stale. Channel/tier duplicates (e.g. "Crunchyroll Amazon Channel" next to "Crunchyroll" for the same type) are hidden. A lock file in `api/storage/` prevents overlapping runs. Exit codes: 0 ok, 1 error or some titles failed, 2 bad arguments, 3 another run in progress.
+
+Weekly cron on Hostinger (hPanel > Advanced > Cron Jobs; the deploy layout puts the backend in `<webroot>/_app`):
+
+```
+0 5 * * 1 /usr/bin/php /home/<user>/domains/<domain>/public_html/_app/bin/refresh-providers.php --stale-days=6 >> /home/<user>/domains/<domain>/public_html/_app/storage/providers.log 2>&1
+```
+
+API (all behind the session):
+
+- Every title object in `GET /api/studios/{slug}/movies`, `/api/home`, `/api/titles`, `/api/search` and `/api/users/{tag}/profile` (watched, pending and recommendation lists) carries `providers: [{id, type}]` (one entry per provider and type, `type` one of `flatrate|free|ads|rent|buy`, ordered by type then TMDB priority) and `providersLink` (TMDB watch page for the country, or `null`).
+- `GET /api/studios/{slug}/movies` also returns a top-level `providers: {"<id>": {name, logoUrl}}` dictionary with the providers used in that payload. Other endpoints resolve ids with `GET /api/providers` (static, ETag): `[{id, name, logoUrl, titleCount, flatrateCount}]`, most used first; `?used=1` lists only providers with at least one title (for the filter UI).
+- `GET /api/titles` filters: `provider=<id>[,<id>]` and `ptype=flatrate|rent|buy|any` (`flatrate` also matches `free` and `ads`; without `ptype` any type matches; `ptype` alone means "has any provider of that type").
+
+Production runbook: back up, apply 006, upload `api/`, run `php _app/bin/refresh-providers.php` once (SSH, or a one-off cron with `--stale-days=0`), then add the weekly cron above.
