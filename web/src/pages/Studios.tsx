@@ -3,7 +3,7 @@ import StudioLogo from '../components/StudioLogo'
 import { HomeSkeleton } from '../components/Skeleton'
 import { useProgress, useStudios } from '../queries'
 
-export default function Home() {
+export default function Studios() {
   const studios = useStudios()
   const progress = useProgress()
 

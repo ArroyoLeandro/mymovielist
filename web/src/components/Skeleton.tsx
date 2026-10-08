@@ -124,3 +124,28 @@ export function HomeSkeleton() {
     </Busy>
   )
 }
+
+/** Themed horizontal rows (home). */
+export function RowsSkeleton({ rows = 3 }: { rows?: number }) {
+  return (
+    <Busy label="Cargando">
+      {Array.from({ length: rows }, (_, r) => (
+        <section key={r} className="saga" aria-hidden="true">
+          <Sk className="sk-h2" style={{ marginBottom: 12 }} />
+          <div className="saga-scroll">
+            {Array.from({ length: 8 }, (_, i) => <SkCard key={i} />)}
+          </div>
+        </section>
+      ))}
+    </Busy>
+  )
+}
+
+/** Plain grid of title placeholders (catalog grid, search). */
+export function GridSkeleton({ cards = 12 }: { cards?: number }) {
+  return (
+    <div className="grid" role="status" aria-busy="true" aria-label="Cargando títulos">
+      {Array.from({ length: cards }, (_, i) => <SkCard key={i} />)}
+    </div>
+  )
+}
