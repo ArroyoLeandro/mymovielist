@@ -11,9 +11,9 @@ use App\Db;
 use App\Http;
 use App\HttpError;
 use App\Repository;
+use App\TitleExtras;
 use App\TmdbClient;
 use App\TmdbSearch;
-use App\Trailers;
 use App\WatchProviders;
 
 require __DIR__ . '/../src/Http.php';
@@ -160,27 +160,28 @@ try {
             throw new HttpError(404, 'Title not found.');
         }
         Http::json($versions);
-    } elseif ($method === 'GET' && preg_match('#^/api/titles/(\d+)/trailers$#', $path, $m)) {
-        // YouTube trailers from TMDB, fetched on demand when a title modal opens. Videos rarely change: the disk cache
-        // keeps them 6 days (the weekly sync prunes after 7). A TMDB failure is not fatal: an empty result the client
-        // ignores, never cached by the browser.
+    } elseif ($method === 'GET' && preg_match('#^/api/titles/(\d+)/(?:extras|trailers)$#', $path, $m)) {
+        // TMDB extras of the title modal (YouTube trailers and synopsis), fetched on demand when it opens. `/trailers` is
+        // its first name, kept for web builds still open in a browser (they ignore the synopsis fields). Both rarely change:
+        // the disk cache keeps them 6 days (the weekly sync prunes after 7). A TMDB failure is not fatal: an empty result
+        // the client ignores, never cached by the browser.
         $ref = $repo->tmdbRef((int) $m[1]);
         if ($ref === null) {
             throw new HttpError(404, 'Title not found.');
         }
         if ($ref['tmdbId'] === null) {
-            Http::jsonCached(['original' => null, 'latino' => null]);
+            Http::jsonCached(TitleExtras::none());
         }
         session_write_close(); // TMDB can take a moment: do not block the user's other requests
         try {
             $tmdb = tmdbClient($config, 6 * 86400);
             $tmdb->deadline = microtime(true) + 5; // no new TMDB request or retry after 5 s (cache hits are still served)
-            $trailers = Trailers::fetch($tmdb, $ref['mediaType'], $ref['tmdbId']);
+            $extras = TitleExtras::fetch($tmdb, $ref['mediaType'], $ref['tmdbId']);
         } catch (RuntimeException $e) {
-            error_log('TMDB trailers failed for title ' . (int) $m[1] . ': ' . $e->getMessage());
-            Http::json(['original' => null, 'latino' => null, 'unavailable' => true]);
+            error_log('TMDB extras failed for title ' . (int) $m[1] . ': ' . $e->getMessage());
+            Http::json(TitleExtras::none() + ['unavailable' => true]);
         }
-        Http::jsonCached($trailers);
+        Http::jsonCached($extras);
     } elseif ($path === '/api/providers' && $method === 'GET') {
         // Static (changes only when bin/refresh-providers.php runs): cacheable. ?used=1 = providers with >= 1 title.
         Http::jsonCached($repo->providers(($_GET['used'] ?? '') === '1'));

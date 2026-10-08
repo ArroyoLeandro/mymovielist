@@ -37,12 +37,15 @@ export interface RatingRow {
 /** A YouTube trailer (watch URL: https://www.youtube.com/watch?v=<key>). */
 export interface Trailer { key: string; name: string }
 /**
- * Trailers of a title: in its original language (or English, flagged `fallback`, when there is none and the original
- * language is not English) and a Latin-American Spanish dub. `unavailable`: TMDB failed; try again on a later open.
+ * TMDB extras of the title modal. Trailers: in its original language (or English, flagged `fallback`, when there is none
+ * and the original language is not English) and a Latin-American Spanish dub. Synopsis: Latin-American Spanish, else
+ * Spain's, else English (`overviewLang`); null when TMDB has none. `unavailable`: TMDB failed; try again on a later open.
  */
-export interface Trailers {
+export interface TitleExtras {
   original: (Trailer & { lang: string; fallback: boolean }) | null
   latino: Trailer | null
+  overview: string | null
+  overviewLang: 'es-MX' | 'es-ES' | 'en' | null
   unavailable?: boolean
 }
 export interface Section { slug: string; name: string; period: string; movies: Movie[] }
@@ -246,7 +249,8 @@ export const api = {
   search: (q: string) => request<StateTitle[]>('GET', `/search?q=${encodeURIComponent(q)}`),
   /** Other versions of a title (remakes, the series and the movie...), oldest first. */
   versions: (id: number) => request<StateTitle[]>('GET', `/titles/${id}/versions`),
-  trailers: (id: number) => request<Trailers>('GET', `/titles/${id}/trailers`),
+  /** Trailers and synopsis from TMDB (fetched on demand by the server). */
+  extras: (id: number) => request<TitleExtras>('GET', `/titles/${id}/extras`),
   setPending: (id: number, pending: boolean) => request<void>(pending ? 'PUT' : 'DELETE', `/movies/${id}/watchlist`),
   recommend: (id: number, toTags: string[], note: string) =>
     request<{ sentTo: string[] }>('POST', `/movies/${id}/recommendations`, { toTags, note: note.trim() || null }),

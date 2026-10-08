@@ -11,6 +11,7 @@ import { useVersions } from '../queries'
 import Poster from './Poster'
 import { WhereToWatch } from './Providers'
 import ScoreMeter from './ScoreMeter'
+import Synopsis from './Synopsis'
 import Trailers from './Trailers'
 import type { CardMovie, PendingFn, SaveFn } from './TitleCard'
 
@@ -42,7 +43,7 @@ function Versions({ id, onOpen }: { id: number; onOpen: (t: StateTitle) => void 
   )
 }
 
-/** Title detail: the user's own controls first, then trailers, where to watch, other versions, every viewer's score and quiet group stats. */
+/** Title detail: synopsis under the title, the user's own controls, then trailers, where to watch, other versions, every viewer's score and quiet group stats. */
 export default function TitleModal({ movie: m, r, me, onSave, onPending, studioName, sectionName, paused, onRecommend, onOpen, onClose }: {
   movie: CardMovie; r: RatingRow | undefined; me: string; onSave: SaveFn; onPending: PendingFn
   studioName?: string; sectionName?: string; paused: boolean; onRecommend: () => void
@@ -95,6 +96,7 @@ export default function TitleModal({ movie: m, r, me, onSave, onPending, studioN
                 </p>
               )}
             </div>
+            <Synopsis id={m.id} />
           </header>
 
           <div className="td-actions" role="group" aria-label="Tus acciones">

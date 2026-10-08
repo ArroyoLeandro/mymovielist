@@ -1,4 +1,4 @@
-import { useTrailers } from '../queries'
+import { useTitleExtras } from '../queries'
 
 /** YouTube's play-button logo (decorative: the link text names the trailer). */
 function YouTubeIcon() {
@@ -16,7 +16,7 @@ function YouTubeIcon() {
  * trailers, so the modal never waits for TMDB.
  */
 export default function Trailers({ id }: { id: number }) {
-  const { data } = useTrailers(id)
+  const { data } = useTitleExtras(id)
   const links: { label: string; key: string; name: string }[] = []
   if (data?.original) links.push({ label: data.original.fallback ? 'Tráiler (inglés)' : 'Tráiler', key: data.original.key, name: data.original.name })
   if (data?.latino) links.push({ label: 'Tráiler latino', key: data.latino.key, name: data.latino.name })

@@ -30,14 +30,20 @@
   border-color: var(--line-strong); background: var(--panel); box-shadow: 0 4px 14px #0008; backdrop-filter: none; -webkit-backdrop-filter: none;
 }
 .td .td-close:hover { background: var(--panel-2); }
-.td-head { position: relative; isolation: isolate; overflow: hidden; overflow: clip; display: flex; gap: 18px; padding: var(--s5) var(--td-pr) 20px var(--td-pl); }
+/* Poster beside the title block; the synopsis goes under the title block (under both on phones). The first row takes the
+   spare height so the title block stays bottom-aligned with the poster, as before the synopsis. */
+.td-head {
+  position: relative; isolation: isolate; overflow: hidden; overflow: clip;
+  display: grid; grid-template-columns: 140px minmax(0, 1fr); grid-template-rows: 1fr auto; gap: 0 18px;
+  padding: var(--s5) var(--td-pr) 20px var(--td-pl);
+}
 /* Blurred poster backdrop: oversized so the blur has no soft edges, clipped by .td-head. */
 .td-head.has-bg::before { content: ''; position: absolute; inset: -30px; z-index: -2; background: var(--td-bg) center / cover; filter: blur(28px) saturate(1.3); opacity: 0.4; pointer-events: none; }
 .td-head::after { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(to bottom, transparent 30%, var(--panel)); pointer-events: none; }
-.td-poster { flex: 0 0 140px; min-width: 0; }
+.td-poster { grid-row: 1 / 3; align-self: start; min-width: 0; }
 .td-poster .poster { box-shadow: 0 10px 30px #0009; }
 /* padding-right keeps the title clear of the close button (10px + 40px from the edge). */
-.td-info { flex: 1 1 0; display: flex; flex-direction: column; justify-content: flex-end; gap: var(--s1); min-width: 0; padding-right: 36px; }
+.td-info { grid-column: 2; display: flex; flex-direction: column; justify-content: flex-end; gap: var(--s1); min-width: 0; padding-right: 36px; }
 .td-info h2 { font-size: 1.7rem; line-height: 1.1; overflow-wrap: anywhere; }
 .td-orig, .td-year { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
 .td-tags { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; margin: 6px 0 0; }
@@ -46,6 +52,19 @@
 .td-added { margin: 8px 0 0; color: var(--muted); font-size: var(--fs-meta); }
 .td-added a { color: var(--text); font-weight: 600; text-decoration: none; }
 .td-added a:hover { color: var(--gold); text-decoration: underline; }
+/* Synopsis: four lines, "Ver más" only when it overflows. .reserve (the skeleton, and the text that replaced it) holds
+   four lines plus the footer row, so the actions row does not move when TMDB answers. */
+.td-syn { grid-column: 2; min-width: 0; margin-top: var(--s3); font-size: 0.92rem; line-height: 1.5; }
+.td-syn.reserve { min-height: calc(4 * 1.5em + 32px); }
+.td-syn-text { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
+.td-syn-text.clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden; }
+.td-syn-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--s3); min-height: 32px; margin: 0; }
+.td-syn-lang { color: var(--muted); font-size: var(--fs-meta); }
+.td-syn-more { min-height: 32px; color: var(--gold); font-weight: 600; }
+.td-syn-more:hover { text-decoration: underline; }
+.td-syn-sk { display: grid; grid-auto-rows: 1.5em; align-items: center; }
+.td-syn-sk .sk { height: 0.7em; opacity: 0.7; }
+.td-syn-sk .sk:last-child { width: 60%; }
 
 /* Actions: one segmented row right under the header. Icon over label so three fit at 288px. */
 .td-actions {
@@ -125,8 +144,9 @@
   .td-back { place-items: end stretch; padding: 0; }
   .td { width: 100%; max-width: 100vw; max-height: 94dvh; border-width: 1px 0 0; border-radius: var(--r-lg) var(--r-lg) 0 0; animation: sheet 0.25s var(--ease); }
   .td .td-close { top: 8px; right: calc(10px + env(safe-area-inset-right, 0px)); }
-  .td-head { gap: 12px; padding-top: 20px; padding-bottom: var(--s4); }
-  .td-poster { flex-basis: 84px; }
+  .td-head { grid-template-columns: 84px minmax(0, 1fr); grid-template-rows: auto; column-gap: 12px; padding-top: 20px; padding-bottom: var(--s4); }
+  .td-poster { grid-row: 1; }
+  .td-syn { grid-column: 1 / -1; }
   .td-info h2 { font-size: 1.3rem; }
   .td-scroll > :last-child { padding-bottom: calc(var(--s5) + env(safe-area-inset-bottom, 0px)); }
 }

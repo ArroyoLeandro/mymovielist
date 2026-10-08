@@ -12,9 +12,9 @@ namespace App;
  *     is not Spanish (a Spanish-language title already plays in Spanish).
  *
  * TMDB filters videos by language and the bare "es" only matches Spain (es-ES), so Latin-American videos are requested
- * by locale (es-MX, es-AR, ...). At most two requests, both on the shared disk cache: the details with English and
- * Latin-American videos appended (this also gives original_language), then the original-language videos when that
- * language is not English.
+ * by locale (es-MX, es-AR, ...). At most two requests, both on the caller's disk cache: the details with English and
+ * Latin-American videos appended (TitleExtras makes it, see detailsParams(); it also gives original_language), then the
+ * original-language videos when that language is not English.
  */
 final class Trailers
 {
@@ -25,16 +25,23 @@ final class Trailers
     private const TYPES = ['Trailer' => 0, 'Teaser' => 1];
 
     /**
-     * @param string $mediaType 'movie' or 'series'
+     * Video parameters of the title's details request: the videos in English and Latin-American Spanish.
+     * @return array<string, string>
+     */
+    public static function detailsParams(): array
+    {
+        return ['append_to_response' => 'videos', 'include_video_language' => implode(',', array_merge(['en'], self::LATAM_LOCALES))];
+    }
+
+    /**
+     * Trailers of a title from its TMDB details (requested with detailsParams()); asks for the original-language videos
+     * when that language is not English.
+     * @param string $path TMDB path of the title ('/movie/<id>' or '/tv/<id>')
+     * @param array<string, mixed> $d TMDB details with the videos appended
      * @return array{original: array{key: string, name: string, lang: string, fallback: bool}|null, latino: array{key: string, name: string}|null}
      */
-    public static function fetch(TmdbClient $tmdb, string $mediaType, int $tmdbId): array
+    public static function fromDetails(TmdbClient $tmdb, string $path, array $d): array
     {
-        $path = ($mediaType === 'series' ? '/tv/' : '/movie/') . $tmdbId;
-        $d = $tmdb->get($path, ['append_to_response' => 'videos', 'include_video_language' => implode(',', array_merge(['en'], self::LATAM_LOCALES))]);
-        if (!empty($d['_not_found'])) {
-            return ['original' => null, 'latino' => null];
-        }
         $lang = strtolower((string) ($d['original_language'] ?? ''));
         $videos = (array) ($d['videos']['results'] ?? []);
         if ($lang !== 'en' && preg_match('/\A[a-z]{2,3}\z/', $lang) === 1) {

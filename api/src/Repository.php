@@ -316,7 +316,7 @@ final class Repository
     }
 
     /**
-     * TMDB reference of a title, for on-demand TMDB lookups (trailers).
+     * TMDB reference of a title, for on-demand TMDB lookups (trailers and synopsis).
      * @return array{mediaType: string, tmdbId: int|null}|null null when the title does not exist
      */
     public function tmdbRef(int $movieId): ?array
