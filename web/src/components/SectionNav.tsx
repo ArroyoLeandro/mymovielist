@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { scrollBehavior } from '../lib/motion'
 
 export type NavSection = { slug: string; name: string; period?: string; count: number }
 
@@ -10,7 +12,11 @@ type Props = {
   onToggleAll: () => void
 }
 
-/** Sticky section row: hidden scrollbar, edge fades, desktop arrows, wheel-to-horizontal and scrollspy. */
+/** Height of the sticky header plus the sticky toolbar holding the row: the scrollspy band starts below them. */
+const stickyOffset = (el: HTMLElement | null) =>
+  (document.querySelector<HTMLElement>('.nav')?.offsetHeight ?? 60) + (el?.closest<HTMLElement>('.sticky-bar')?.offsetHeight ?? 70)
+
+/** Section jump row (inside the sticky studio toolbar): hidden scrollbar, edge fades, desktop arrows, wheel-to-horizontal and scrollspy. */
 export default function SectionNav({ sections, visibleSlugs, allCollapsed, onJump, onToggleAll }: Props) {
   const row = useRef<HTMLElement>(null)
   const [edges, setEdges] = useState({ left: false, right: false })
@@ -62,7 +68,8 @@ export default function SectionNav({ sections, visibleSlugs, allCollapsed, onJum
         const first = visibleSlugs.find((s) => inView.has(s))
         if (first) setActive(first)
       },
-      { rootMargin: '-130px 0px -60% 0px' },
+      // The band starts under the sticky header + toolbar.
+      { rootMargin: `-${stickyOffset(row.current)}px 0px -60% 0px` },
     )
     els.forEach((e) => io.observe(e))
     return () => io.disconnect()
@@ -75,25 +82,25 @@ export default function SectionNav({ sections, visibleSlugs, allCollapsed, onJum
     const chip = active ? el?.querySelector<HTMLElement>(`[data-slug="${active}"]`) : null
     if (!el || !chip) return
     const target = chip.offsetLeft - (el.clientWidth - chip.offsetWidth) / 2
-    el.scrollTo({ left: Math.max(0, target), behavior: 'smooth' })
+    el.scrollTo({ left: Math.max(0, target), behavior: scrollBehavior() })
   }, [active])
 
-  const scrollBy = (dir: 1 | -1) => row.current?.scrollBy({ left: dir * row.current.clientWidth * 0.7, behavior: 'smooth' })
+  const scrollBy = (dir: 1 | -1) => row.current?.scrollBy({ left: dir * row.current.clientWidth * 0.7, behavior: scrollBehavior() })
 
   return (
-    <div className="chips-bar">
+    <div className="chips-row">
       <div className="chips-wrap" data-left={edges.left} data-right={edges.right}>
-        <button type="button" className="chips-arrow left" onClick={() => scrollBy(-1)} aria-label="Secciones anteriores" tabIndex={-1} />
-        <nav className="chips" ref={row} onScroll={measure} aria-label="Secciones">
+        <button type="button" className="chips-arrow left" onClick={() => scrollBy(-1)} aria-label="Secciones anteriores" tabIndex={-1}><ChevronLeft size={16} aria-hidden="true" /></button>
+        <nav className="chips" ref={row} onScroll={measure} aria-label="Ir a la sección">
           {sections.map((s) => (
-            <button key={s.slug} data-slug={s.slug} className={active === s.slug ? 'on' : ''} onClick={() => onJump(s.slug)} title={s.period}>
+            <button key={s.slug} type="button" data-slug={s.slug} className={`chip ${active === s.slug ? 'on' : ''}`} aria-current={active === s.slug ? 'location' : undefined} onClick={() => onJump(s.slug)} title={s.period}>
               {s.name} <small>{s.count}</small>
             </button>
           ))}
         </nav>
-        <button type="button" className="chips-arrow right" onClick={() => scrollBy(1)} aria-label="Más secciones" tabIndex={-1} />
+        <button type="button" className="chips-arrow right" onClick={() => scrollBy(1)} aria-label="Más secciones" tabIndex={-1}><ChevronRight size={16} aria-hidden="true" /></button>
       </div>
-      <button className="chips-toggle" onClick={onToggleAll}>{allCollapsed ? 'Expandir' : 'Contraer'}</button>
+      <button type="button" className="btn btn-quiet btn-sm" aria-expanded={!allCollapsed} onClick={onToggleAll}>{allCollapsed ? 'Expandir todo' : 'Contraer todo'}</button>
     </div>
   )
 }

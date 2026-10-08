@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { RankingRow } from '../api'
+import { Users } from 'lucide-react'
 import { useRanking, useStudios } from '../queries'
 import { RankingSkeleton } from '../components/Skeleton'
 import Highlights from '../components/Highlights'
+import { EmptyState, ErrorState } from '../components/States'
 
 // Visual order of the podium: #2 left, #1 center, #3 right.
 const PODIUM_ORDER = [1, 0, 2]
@@ -24,7 +26,7 @@ export default function Ranking() {
   const [tab, setTab] = useState('global') // 'global' or a studio slug
   const [kind, setKind] = useState<Kind>('all')
   const studios = useStudios()
-  const { data: rows, error } = useRanking(tab === 'global' ? undefined : tab) // refetches every 15 s while visible
+  const { data: rows, error, refetch } = useRanking(tab === 'global' ? undefined : tab) // refetches every 15 s while visible
   const isGlobal = tab === 'global'
 
   const entries = useMemo<Entry[]>(() => {
@@ -55,8 +57,9 @@ export default function Ranking() {
   }, [rows, isGlobal, kind])
 
   const body = () => {
-    if (error && !rows) return <p className="error">{error.message}</p>
-    if (!rows) return <RankingSkeleton bare />
+    if (error && !rows) return <ErrorState error={error} onRetry={() => void refetch()} />
+    if (!rows) return <RankingSkeleton />
+    if (entries.length === 0) return <EmptyState icon={Users} title="Todavía no hay nadie en este ranking">Cuando alguien marque títulos como vistos, aparecerá aquí.</EmptyState>
     const rest = entries.slice(3)
     const max = Math.max(1, ...entries.map((r) => r.value))
     return (
@@ -88,7 +91,7 @@ export default function Ranking() {
                   <Link to={`/u/${r.tag}`} className="who">{r.tag}</Link>
                   {r.extra && <small>{r.extra}</small>}
                 </span>
-                <span className="bar"><i style={{ width: `${(r.value / max) * 100}%` }} /></span>
+                <span className="bar-track" aria-hidden="true"><i style={{ width: `${(r.value / max) * 100}%` }} /></span>
                 <span className="count">{r.big} <small>{r.unit}</small></span>
                 <span className="avg">{r.avg !== null ? `★ ${r.avg.toFixed(1)}` : '–'}</span>
               </li>
@@ -101,27 +104,34 @@ export default function Ranking() {
 
   return (
     <>
-      {isGlobal && <Highlights />}
+      <header className="page-head">
+        <h1 className="title">Ranking</h1>
+        <p className="lead">Destacados del grupo y quién lleva más títulos vistos.</p>
+      </header>
 
-      <h1 className="title">Ranking</h1>
-      <p className="muted">{isGlobal ? 'Quién ha visto más.' : 'Quién ha completado más de este estudio.'}</p>
+      <Highlights />
 
-      <nav className="chips rk-tabs" aria-label="Ranking por estudio">
-        <button className={isGlobal ? 'on' : ''} onClick={() => setTab('global')}>Global</button>
-        {studios.data?.map((s) => (
-          <button key={s.slug} className={tab === s.slug ? 'on' : ''} onClick={() => setTab(s.slug)}>{s.name}</button>
-        ))}
-      </nav>
-
-      {isGlobal && (
-        <div className="seg rk-kind" role="group" aria-label="Tipo de título">
-          {KINDS.map((k) => (
-            <button key={k.id} className={kind === k.id ? 'on' : ''} onClick={() => setKind(k.id)}>{k.label}</button>
-          ))}
+      <section aria-labelledby="rk-title">
+        <div className="section-head">
+          <h2 id="rk-title">{isGlobal ? 'Quién ha visto más' : 'Quién completó más de este estudio'}</h2>
         </div>
-      )}
-
-      {body()}
+        <div className="rk-controls">
+          <div className="chip-list" role="group" aria-label="Ranking por estudio">
+            <button type="button" className={`chip ${isGlobal ? 'on' : ''}`} aria-pressed={isGlobal} onClick={() => setTab('global')}>Global</button>
+            {studios.data?.map((s) => (
+              <button key={s.slug} type="button" className={`chip ${tab === s.slug ? 'on' : ''}`} aria-pressed={tab === s.slug} onClick={() => setTab(s.slug)}>{s.name}</button>
+            ))}
+          </div>
+          {isGlobal && (
+            <div className="seg seg-sm" role="group" aria-label="Tipo de título">
+              {KINDS.map((k) => (
+                <button key={k.id} type="button" className={kind === k.id ? 'on' : ''} aria-pressed={kind === k.id} onClick={() => setKind(k.id)}>{k.label}</button>
+              ))}
+            </div>
+          )}
+        </div>
+        {body()}
+      </section>
     </>
   )
 }

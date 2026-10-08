@@ -5,26 +5,45 @@ export function Sk({ className = '', style }: { className?: string; style?: CSSP
   return <span className={`sk ${className}`} style={style} aria-hidden="true" />
 }
 
+/** Same boxes as TitleCard: poster, two-line title slot, year, two-line summary. */
 function SkCard() {
   return (
     <div className="card" aria-hidden="true">
       <Sk className="sk-poster" />
-      <Sk className="sk-line" style={{ width: '80%', marginTop: 6 }} />
-      <Sk className="sk-line sm" style={{ width: '45%' }} />
-      <Sk className="sk-line lg" style={{ width: '55%' }} />
-      <Sk className="sk-scores" />
+      <div className="sk-card-title">
+        <Sk className="sk-line" style={{ width: '85%' }} />
+        <Sk className="sk-line" style={{ width: '55%' }} />
+      </div>
+      <Sk className="sk-line sm" style={{ width: '40%', margin: '4px 0' }} />
+      <Sk className="sk-line sm" style={{ width: '70%' }} />
+      <Sk className="sk-line sm" style={{ width: '45%', marginTop: 4 }} />
     </div>
   )
 }
 
-function SkSection({ cards }: { cards: number }) {
+function SkGrid({ cards, capped = false }: { cards: number; capped?: boolean }) {
   return (
-    <section className="era" aria-hidden="true">
+    <div className={`grid ${capped ? 'capped' : ''}`} aria-hidden="true">
+      {Array.from({ length: cards }, (_, i) => <SkCard key={i} />)}
+    </div>
+  )
+}
+
+function SkSection({ cards, capped }: { cards: number; capped?: boolean }) {
+  return (
+    <section className="section" aria-hidden="true">
       <Sk className="sk-h2" />
-      <div className="grid">
-        {Array.from({ length: cards }, (_, i) => <SkCard key={i} />)}
-      </div>
+      <SkGrid cards={cards} capped={capped} />
     </section>
+  )
+}
+
+function SkPageHead() {
+  return (
+    <div className="page-head" aria-hidden="true">
+      <Sk className="sk-title" />
+      <Sk className="sk-line" style={{ width: 240, marginTop: 12 }} />
+    </div>
   )
 }
 
@@ -32,33 +51,33 @@ function Busy({ label, children }: { label: string; children: ReactNode }) {
   return <div role="status" aria-busy="true" aria-label={label}>{children}</div>
 }
 
+/** Studio page: title + progress, toolbar, first section. */
 export function CatalogSkeleton() {
   return (
     <Busy label="Cargando catálogo">
-      <div className="toolbar" aria-hidden="true">
-        <div className="progress">
-          <Sk className="sk-title" />
-          <Sk className="sk-meter" />
-        </div>
-        <Sk className="sk-input" />
-        <Sk className="sk-seg" />
+      <div className="studio-head" aria-hidden="true">
+        <Sk className="sk-title" />
+        <Sk className="sk-meter" />
       </div>
-      <SkSection cards={8} />
-      <SkSection cards={6} />
+      <div className="sticky-bar" aria-hidden="true">
+        <div className="bar">
+          <Sk className="sk-seg" />
+          <Sk className="sk-search" />
+        </div>
+      </div>
+      <SkSection cards={10} />
     </Busy>
   )
 }
 
-export function RankingSkeleton({ bare = false }: { bare?: boolean }) {
+export function RankingSkeleton() {
   return (
     <Busy label="Cargando ranking">
-      {!bare && <Sk className="sk-title" />}
-      {!bare && <Sk className="sk-line" style={{ width: 180, marginTop: 10 }} />}
       <div className="podium" aria-hidden="true">
         {[2, 1, 3].map((p) => (
           <div key={p} className={`pod pod-${p}`}>
             <Sk className="sk-line" style={{ width: '70%' }} />
-            <Sk className="sk-line sm" style={{ width: '50%' }} />
+            <Sk className="sk-line sm" style={{ width: '50%', margin: '6px 0 8px' }} />
             <Sk className="pod-step" />
           </div>
         ))}
@@ -72,7 +91,7 @@ export function RankingSkeleton({ bare = false }: { bare?: boolean }) {
 
 export function ProfileSkeleton() {
   return (
-    <Busy label="Cargando lista">
+    <Busy label="Cargando perfil">
       <Sk className="sk-title" style={{ maxWidth: 360 }} />
       <section className="stats" aria-hidden="true">
         <Sk className="sk-stat" />
@@ -86,38 +105,40 @@ export function ProfileSkeleton() {
   )
 }
 
-/** Initial session check: nav bar + catalog layout, before we know whether the user is logged in. */
+/** Initial session check: header + home layout, before we know whether the user is logged in. */
 export function AppSkeleton() {
   return (
     <>
       <header className="nav" aria-hidden="true">
         <div className="nav-inner">
           <Sk className="sk-brand" />
-          <nav>
+          <div className="nav-links">
             <Sk className="sk-pill" />
             <Sk className="sk-pill" />
             <Sk className="sk-pill" />
-          </nav>
-          <Sk className="sk-pill" />
+          </div>
         </div>
       </header>
-      <main className="page"><CatalogSkeleton /></main>
+      <main className="page">
+        <SkPageHead />
+        <RowsSkeleton />
+      </main>
     </>
   )
 }
 
-export function HomeSkeleton() {
+/** /estudios: logo tiles. */
+export function StudiosSkeleton() {
   return (
     <Busy label="Cargando estudios">
-      <Sk className="sk-title" />
-      <Sk className="sk-line" style={{ width: 240, marginTop: 10 }} />
+      <SkPageHead />
       <div className="studios" aria-hidden="true">
-        {Array.from({ length: 6 }, (_, i) => (
+        {Array.from({ length: 8 }, (_, i) => (
           <div key={i} className="studio-card">
             <Sk className="sk-logo" />
-            <Sk className="sk-line lg" style={{ width: '60%' }} />
+            <Sk className="sk-line" style={{ width: '60%', height: 20, marginTop: 6 }} />
             <Sk className="sk-line sm" style={{ width: '40%' }} />
-            <Sk className="sk-meter" />
+            <Sk className="sk-meter" style={{ marginTop: 4 }} />
           </div>
         ))}
       </div>
@@ -125,27 +146,20 @@ export function HomeSkeleton() {
   )
 }
 
-/** Themed horizontal rows (home). */
-export function RowsSkeleton({ rows = 3 }: { rows?: number }) {
+/** Home: capped sections. */
+export function RowsSkeleton({ rows = 2 }: { rows?: number }) {
   return (
-    <Busy label="Cargando">
-      {Array.from({ length: rows }, (_, r) => (
-        <section key={r} className="saga" aria-hidden="true">
-          <Sk className="sk-h2" style={{ marginBottom: 12 }} />
-          <div className="saga-scroll">
-            {Array.from({ length: 8 }, (_, i) => <SkCard key={i} />)}
-          </div>
-        </section>
-      ))}
+    <Busy label="Cargando inicio">
+      {Array.from({ length: rows }, (_, r) => <SkSection key={r} cards={10} capped />)}
     </Busy>
   )
 }
 
-/** Plain grid of title placeholders (catalog grid, search). */
+/** Plain grid of title placeholders (catalog grid, next page). */
 export function GridSkeleton({ cards = 12 }: { cards?: number }) {
   return (
-    <div className="grid" role="status" aria-busy="true" aria-label="Cargando títulos">
-      {Array.from({ length: cards }, (_, i) => <SkCard key={i} />)}
+    <div role="status" aria-busy="true" aria-label="Cargando títulos">
+      <SkGrid cards={cards} />
     </div>
   )
 }
