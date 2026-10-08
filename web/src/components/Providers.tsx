@@ -1,6 +1,7 @@
+import type { ReactNode } from 'react'
 import { ExternalLink } from 'lucide-react'
 import type { ProviderInfo, ProviderRef, ProviderType } from '../api'
-import { isFree, isSubscription, TYPE_LABEL, useProviderLookup } from '../lib/providers'
+import { isFree, isSubscription, providerHome, TYPE_LABEL, useProviderLookup } from '../lib/providers'
 import '../providers.css'
 
 /** One provider logo (TMDB w92). Size comes from the surrounding CSS; a lettered tile stands in when there is no logo. */
@@ -13,6 +14,25 @@ export function ProviderLogo({ info, title }: { info: ProviderInfo | undefined; 
       className="prov-logo" src={info.logoUrl} alt="" title={title} width={92} height={92}
       loading="lazy" decoding="async" referrerPolicy="no-referrer"
     />
+  )
+}
+
+/**
+ * Wraps a logo (or the "Gratis" capsule) in a link to the platform's own site, new tab. The click never reaches
+ * the card, so it does not open the title modal. Unknown homepage: a plain element with the same tooltip.
+ */
+function ProviderLink({ id, info, tip, className, children }: {
+  id: number; info: ProviderInfo | undefined; tip: string; className?: string; children: ReactNode
+}) {
+  const url = providerHome(id, info?.name)
+  if (!url) return <span className={className ?? 'prov-plain'} title={tip}>{children}</span>
+  return (
+    <a
+      className={`prov-link ${className ?? ''}`} href={url} target="_blank" rel="noopener noreferrer"
+      aria-label={`Abrir ${info?.name ?? 'plataforma'}`} title={`${tip} · abrir sitio`} onClick={(e) => e.stopPropagation()}
+    >
+      {children}
+    </a>
   )
 }
 
@@ -45,13 +65,13 @@ export function ProviderStrip({ refs }: { refs: ProviderRef[] | undefined }) {
     const rest = subs.length - shown.length
     const label = `Dónde verla: ${subs.map((p) => `${nameOf(p.id)} (${TYPE_LABEL[p.type].toLowerCase()})`).join(', ')}`
     return (
-      <div className="prov-strip" role="img" aria-label={label}>
+      <div className="prov-strip" role="group" aria-label={label}>
         {shown.map((p) => {
           const tip = `${nameOf(p.id)} · ${TYPE_LABEL[p.type]}`
           return isFree(p.type) ? (
-            <span key={p.id} className="prov-free" title={tip}><ProviderLogo info={lookup(p.id)} />Gratis</span>
+            <ProviderLink key={p.id} id={p.id} info={lookup(p.id)} tip={tip} className="prov-free"><ProviderLogo info={lookup(p.id)} />Gratis</ProviderLink>
           ) : (
-            <ProviderLogo key={p.id} info={lookup(p.id)} title={tip} />
+            <ProviderLink key={p.id} id={p.id} info={lookup(p.id)} tip={tip}><ProviderLogo info={lookup(p.id)} /></ProviderLink>
           )
         })}
         {rest > 0 && <span className="prov-more" title={subs.slice(shown.length).map((p) => nameOf(p.id)).join(', ')}>+{rest}</span>}
@@ -63,10 +83,12 @@ export function ProviderStrip({ refs }: { refs: ProviderRef[] | undefined }) {
   if (paid.length > 0) {
     const label = `Solo alquiler o compra: ${paid.map((p) => nameOf(p.id)).join(', ')}`
     return (
-      <div className="prov-strip paid" role="img" aria-label={label}>
+      <div className="prov-strip paid" role="group" aria-label={label}>
         <span className="prov-paid" title={label}>Alquiler/compra</span>
         {paid.slice(0, 2).map((p) => (
-          <ProviderLogo key={p.id} info={lookup(p.id)} title={`${nameOf(p.id)} · ${p.type === 'rent' ? 'Alquiler' : 'Compra'}`} />
+          <ProviderLink key={p.id} id={p.id} info={lookup(p.id)} tip={`${nameOf(p.id)} · ${TYPE_LABEL[p.type]}`}>
+            <ProviderLogo info={lookup(p.id)} />
+          </ProviderLink>
         ))}
       </div>
     )
@@ -105,7 +127,9 @@ export function WhereToWatch({ id, refs, link }: { id: number; refs: ProviderRef
                       const info = lookup(p.id)
                       return (
                         <li key={p.id} className="where-chip">
-                          <ProviderLogo info={info} />
+                          <ProviderLink id={p.id} info={info} tip={`${info?.name ?? 'Plataforma'} · ${TYPE_LABEL[p.type]}`}>
+                            <ProviderLogo info={info} />
+                          </ProviderLink>
                           <span>{info?.name ?? 'Plataforma'}</span>
                         </li>
                       )
