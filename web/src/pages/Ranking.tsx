@@ -101,6 +101,8 @@ export default function Ranking() {
 
   return (
     <>
+      {isGlobal && <Highlights />}
+
       <h1 className="title">Ranking</h1>
       <p className="muted">{isGlobal ? 'Quién ha visto más.' : 'Quién ha completado más de este estudio.'}</p>
 
@@ -120,7 +122,6 @@ export default function Ranking() {
       )}
 
       {body()}
-      {isGlobal && <Highlights />}
     </>
   )
 }
