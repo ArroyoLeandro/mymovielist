@@ -8,8 +8,8 @@
   background: none; border: 0; padding: 0; margin: 0; width: auto; max-width: 100%; color: inherit; font: inherit; text-align: left; cursor: pointer;
 }
 .card .title-open {
-  display: block; font-family: var(--display); font-weight: 700; font-size: 0.98rem; line-height: 1.2; color: var(--text);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; font-family: var(--display); font-weight: 700; font-size: 0.98rem; line-height: 1.2; color: var(--text);
+  overflow: hidden; overflow-wrap: anywhere; white-space: normal;
 }
 .card .title-open:hover { color: var(--gold); text-decoration: underline; }
 .card .title-open:focus-visible, .card .summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 4px; }
@@ -107,3 +107,14 @@ main .card.seen .art, .page .card.seen .art { box-shadow: 0 0 0 1px #d4f52655; }
   .score-meter i { transition: none; }
   .score-meter i.peak { transform: none; }
 }
+
+/* ---------- equal card sizes in grids and rows ---------- */
+:root { --card-w: 168px; }
+@media (max-width: 480px) { :root { --card-w: 140px; } }
+.card { min-width: 0; }
+.card > * { min-width: 0; max-width: 100%; }
+.card .art { width: 100%; }
+.card .poster { display: block; width: 100%; aspect-ratio: 2 / 3; object-fit: cover; }
+.saga-scroll > .card { flex: 0 0 var(--card-w); width: var(--card-w); }
+.saga-scroll { padding-inline: 2px; }
+.saga-wrap .chips-arrow { top: calc(var(--card-w) * 0.75 + 4px); margin-top: -17px; }
