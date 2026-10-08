@@ -6,11 +6,14 @@ const KEY_COMMIT_MS = 450
 /**
  * 1-10 segmented meter. Hover or drag previews the fill, tap commits, tapping the current score clears it.
  * Keyboard: arrows / Home / End move, digits set (0 = 10), Delete or Backspace clears.
+ * `compact` shrinks the readout and segments (secondary placement); `hint` replaces the default helper line.
  */
-export default function ScoreMeter({ value, onChange, disabled = false }: {
+export default function ScoreMeter({ value, onChange, disabled = false, compact = false, hint }: {
   value: number | null
   onChange: (n: number | null) => void
   disabled?: boolean
+  compact?: boolean
+  hint?: string
 }) {
   const track = useRef<HTMLDivElement>(null)
   const [preview, setPreview] = useState<number | null>(null) // pointer hover / drag
@@ -83,7 +86,7 @@ export default function ScoreMeter({ value, onChange, disabled = false }: {
   }
 
   return (
-    <div className={`meter-wrap ${disabled ? 'disabled' : ''}`}>
+    <div className={`meter-wrap ${disabled ? 'disabled' : ''} ${compact ? 'compact' : ''}`}>
       <p className="meter-read" aria-hidden="true">
         <strong key={shown ?? 'none'} className={shown ? 'pop' : 'none'}>{shown ?? '–'}</strong>
         <span>{shown ? SCORE_LABELS[shown - 1] : 'Toca para puntuar'}</span>
@@ -117,7 +120,7 @@ export default function ScoreMeter({ value, onChange, disabled = false }: {
           </i>
         ))}
       </div>
-      <p className="meter-hint">{value ? 'Toca de nuevo tu puntaje para quitarlo' : 'Desliza o usa las flechas del teclado'}</p>
+      <p className="meter-hint">{hint ?? (value ? 'Toca de nuevo tu puntaje para quitarlo' : 'Desliza o usa las flechas del teclado')}</p>
     </div>
   )
 }

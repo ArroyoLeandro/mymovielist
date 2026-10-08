@@ -1,7 +1,7 @@
 import { useMemo, useRef, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
-import { Bookmark, BookmarkCheck, Check, Plus, Send, Users, X } from 'lucide-react'
+import { Bookmark, BookmarkCheck, Check, Eye, Send, Star, X } from 'lucide-react'
 import type { RatingRow } from '../api'
 import { useDialog } from '../lib/useDialog'
 import { useTitleActions } from '../lib/useTitleActions'
@@ -10,7 +10,7 @@ import Poster from './Poster'
 import ScoreMeter from './ScoreMeter'
 import type { CardMovie, PendingFn, SaveFn } from './TitleCard'
 
-/** Title detail: group stats, every viewer's score, and the user's own controls. */
+/** Title detail: the user's own controls first, then every viewer's score, then quiet group stats. */
 export default function TitleModal({ movie: m, r, me, onSave, onPending, studioName, sectionName, paused, onRecommend, onClose }: {
   movie: CardMovie; r: RatingRow | undefined; me: string; onSave: SaveFn; onPending: PendingFn
   studioName?: string; sectionName?: string; paused: boolean; onRecommend: () => void; onClose: () => void
@@ -56,47 +56,31 @@ export default function TitleModal({ movie: m, r, me, onSave, onPending, studioN
             </div>
           </header>
 
-          <section className="td-stats" aria-label="Puntajes del grupo">
-            <div className="td-avg">
-              <strong>{r?.averageScore != null ? r.averageScore.toFixed(1) : '–'}</strong>
-              <span>promedio</span>
-            </div>
-            <div className="td-count">
-              <strong><Users size={18} aria-hidden="true" /> {count}</strong>
-              <span>{count === 1 ? 'persona la vio' : 'personas la vieron'}</span>
-            </div>
-            <div
-              className="td-dist"
-              role="img"
-              aria-label={scored ? `Distribución de puntajes: ${dist.map((n, i) => `${i + 1}: ${n}`).join(', ')}` : 'Sin puntajes todavía'}
-            >
-              {dist.map((n, i) => (
-                <div key={i} className={`td-bar ${tier(i + 1)}`} title={`${i + 1}: ${n}`}>
-                  <i style={{ height: `${n ? Math.max(8, (n / maxDist) * 100) : 0}%` }} />
-                  <small>{i + 1}</small>
-                </div>
-              ))}
-            </div>
-          </section>
+          <div className="td-actions" role="group" aria-label="Tus acciones">
+            <button type="button" className={`td-act ${watched ? 'on' : ''}`} aria-pressed={watched} onClick={toggleWatched}>
+              {watched ? <Check size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
+              <span>{watched ? 'Vista' : 'Ya la vi'}</span>
+            </button>
+            {!watched && (
+              <button type="button" className={`td-act ${pending ? 'on' : ''}`} aria-pressed={pending} onClick={() => void wish()}>
+                {pending ? <BookmarkCheck size={18} aria-hidden="true" /> : <Bookmark size={18} aria-hidden="true" />}
+                <span>{pending ? 'Pendiente' : 'Quiero verla'}</span>
+              </button>
+            )}
+            <button type="button" className="td-act" aria-haspopup="dialog" onClick={onRecommend}>
+              <Send size={18} aria-hidden="true" />
+              <span>Recomendar</span>
+            </button>
+          </div>
+          {failed && <p className="error small td-error" role="alert">No se pudo guardar. Inténtalo de nuevo.</p>}
 
-          <section className="td-mine" aria-label="Tus controles">
-            <div className="td-mine-top">
-              <button type="button" className={`btn btn-ghost ${watched ? 'on' : ''}`} aria-pressed={watched} onClick={toggleWatched}>
-                {watched ? <Check size={16} aria-hidden="true" /> : <Plus size={16} aria-hidden="true" />}
-                {watched ? 'Vista' : 'Marcar como vista'}
-              </button>
-              {!watched && (
-                <button type="button" className={`btn btn-ghost ${pending ? 'on' : ''}`} aria-pressed={pending} onClick={() => void wish()}>
-                  {pending ? <BookmarkCheck size={16} aria-hidden="true" /> : <Bookmark size={16} aria-hidden="true" />}
-                  {pending ? 'En pendientes' : 'Quiero verla'}
-                </button>
-              )}
-              <button type="button" className="btn btn-ghost" aria-haspopup="dialog" onClick={onRecommend}>
-                <Send size={16} aria-hidden="true" /> Recomendar
-              </button>
-            </div>
-            <ScoreMeter value={score} onChange={(n) => void setScore(n)} />
-            {failed && <p className="error small" role="alert">No se pudo guardar. Inténtalo de nuevo.</p>}
+          <section className="td-mine" aria-label="Tu puntaje">
+            <ScoreMeter
+              value={score}
+              onChange={(n) => void setScore(n)}
+              compact={!watched}
+              hint={watched ? undefined : 'Al puntuarla queda marcada como vista'}
+            />
           </section>
 
           <section className="td-people" aria-labelledby={`td-people-${m.id}`}>
@@ -114,6 +98,29 @@ export default function TitleModal({ movie: m, r, me, onSave, onPending, studioN
               </ul>
             )}
           </section>
+
+          {count > 0 && (
+            <section className="td-group" aria-label="Puntajes del grupo">
+              <p className="td-group-line">
+                {r?.averageScore != null && (
+                  <>
+                    <Star size={14} className="td-star" aria-hidden="true" />
+                    <strong>{r.averageScore.toFixed(1)}</strong> promedio ·{' '}
+                  </>
+                )}
+                {count} {count === 1 ? 'la vio' : 'la vieron'}
+              </p>
+              {scored > 0 && (
+                <div className="td-dist" role="img" aria-label={`Distribución de puntajes: ${dist.map((n, i) => `${i + 1}: ${n}`).join(', ')}`}>
+                  {dist.map((n, i) => (
+                    <i key={i} className={n ? 'has' : ''} style={n ? { height: `${Math.max(15, (n / maxDist) * 100)}%` } : undefined} title={`${i + 1}: ${n}`} />
+                  ))}
+                  <small aria-hidden="true">1</small>
+                  <small aria-hidden="true">10</small>
+                </div>
+              )}
+            </section>
+          )}
         </div>
       </div>
     </div>,
