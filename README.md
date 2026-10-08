@@ -91,3 +91,7 @@ php bin/import-tmdb.php --studio=all     # studios first (disney-xd leads), then
 ```
 
 Spanish saga names: the importer asks TMDB for the es-MX collection name (then any Spanish translation, then the original); fixes go in `api/database/studios/saga-names.php` (`collection:<tmdb id>` or franchise slug).
+
+### Watchlist and recommendations (migration 005)
+
+Apply `api/database/migrations/005_watchlist_recommendations.sql` once (creates `watchlist` and `recommendations`; additive and re-runnable, no data is touched). Both tables keep a `movie_id` column, so the importer's `--prune` never removes a pending or recommended title. Deploy order on production: back up, apply 004 (if pending) and 005, upload the new `api/` and `web` build. The new endpoints (`/api/home`, `/api/titles`, `/api/search`, `/api/users`, `/api/users/{tag}/profile`, watchlist and recommendations) replace `/api/users/{tag}/list`.
