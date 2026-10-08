@@ -12,7 +12,7 @@ namespace App;
 final class StudioDefinitions
 {
     /** Files in database/studios that are data, not studios. */
-    private const NOT_STUDIOS = ['title-overrides', 'always-keep', 'franchises', 'saga-names', 'studio-order', 'exclusions'];
+    private const NOT_STUDIOS = ['title-overrides', 'always-keep', 'franchises', 'saga-names', 'studio-order', 'exclusions', 'not-versions'];
     /** Catch-all categories: imported last so the studios keep their titles. */
     private const CATEGORIES = ['anime', 'series', 'peliculas'];
 
@@ -76,6 +76,21 @@ final class StudioDefinitions
             'companies' => array_values(array_map('intval', array_keys($x['companies'] ?? []))),
             'titles' => array_fill_keys(array_keys($x['titles'] ?? []), true),
         ];
+    }
+
+    /**
+     * Pairs that look like versions of each other but are different works (database/studios/not-versions.php).
+     * @return array<string, true> keyed '<ref>|<ref>' with both orders, refs 'movie:<id>' / 'tv:<id>'
+     */
+    public static function notVersions(): array
+    {
+        $file = self::dir() . '/not-versions.php';
+        $pairs = [];
+        foreach (is_file($file) ? require $file : [] as [$a, $b]) {
+            $pairs["$a|$b"] = true;
+            $pairs["$b|$a"] = true;
+        }
+        return $pairs;
     }
 
     /**

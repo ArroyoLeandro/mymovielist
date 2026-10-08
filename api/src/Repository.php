@@ -1282,25 +1282,30 @@ final class Repository
     /**
      * Other versions of a title (remakes, reboots, the series and the movie...): titles whose Spanish or original
      * title has the same version key as the Spanish or original title of this one. Computed at read time over every
-     * title (a few ms for ~3000 rows), so renames by the weekly sync apply right away. Oldest first.
+     * title (a few ms for ~3000 rows), so renames by the weekly sync apply right away. Pairs listed in
+     * database/studios/not-versions.php share a key but are different works and are skipped. Oldest first.
      * @return list<array<string, mixed>>|null null when the title does not exist
      */
     public function versions(int $id, int $userId): ?array
     {
-        $all = $this->run('SELECT id, title, original_title FROM movies', [])->fetchAll();
+        $all = $this->run('SELECT id, title, original_title, media_type, tmdb_id FROM movies', [])->fetchAll();
         $mine = null;
+        $myRef = '';
         foreach ($all as $r) {
             if ((int) $r['id'] === $id) {
                 $mine = self::versionKeys($r);
+                $myRef = self::tmdbRefKey($r);
                 break;
             }
         }
         if ($mine === null) {
             return null;
         }
+        $notVersions = StudioDefinitions::notVersions();
         $ids = [];
         foreach ($all as $r) {
-            if ((int) $r['id'] !== $id && $mine && array_intersect_key($mine, self::versionKeys($r))) {
+            if ((int) $r['id'] !== $id && $mine && array_intersect_key($mine, self::versionKeys($r))
+                && !isset($notVersions[$myRef . '|' . self::tmdbRefKey($r)])) {
                 $ids[] = (int) $r['id'];
             }
         }
@@ -1309,6 +1314,15 @@ final class Repository
         }
         $in = implode(',', array_fill(0, count($ids), '?'));
         return $this->withStates($this->titleQuery('', "m.id IN ($in)", 'm.year, m.id', $ids, count($ids)), $userId);
+    }
+
+    /**
+     * A row's TMDB ref in the studio data files' format: 'movie:<id>' / 'tv:<id>' ('' without a TMDB id).
+     * @param array<string, mixed> $r row with media_type and tmdb_id
+     */
+    private static function tmdbRefKey(array $r): string
+    {
+        return $r['tmdb_id'] === null ? '' : ($r['media_type'] === 'series' ? 'tv' : 'movie') . ':' . (int) $r['tmdb_id'];
     }
 
     /**
