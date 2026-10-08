@@ -76,7 +76,9 @@ User report (2026-10-08): the site feels full of repeated movies/series. Audit o
 
 - S5 done (route: delegated writer; commit 4da5537). `/api/titles/{id}/extras` (trailers + `overview`, `overviewLang` es-MX | es-ES | en | null), `/trailers` kept as alias; `language=es-MX` on the existing details request (raw TMDB video sets identical with/without it on 110/110 titles; trailer keys identical on the S4 table and 100 random titles); fallback es-ES then en-US only when empty. UI: `Synopsis.tsx` under the title block, clamped to 4 lines, "Ver más" button only on overflow (aria-expanded/controls), "(en inglés)" note, skeleton keeps the actions row in place on first open. Evidence: php 7.4 lint 46 files OK; build OK (CSS 72.70 / 15.29 gz, JS 431.59 / 132.31 gz; parent re-ran); synopsis language on 400 sampled titles: es-MX 390, es-ES 9, en 1, none 0; headless Chrome 360/1280 90/90; user data unchanged.
 
+- S5 delivery: RDD assess medium, `under_budget` (241 lines), not reviewed. `main` fast-forwarded (dd06fb9) and pushed. Prod: uploaded `_app/src/TitleExtras.php`, `Trailers.php`, `Repository.php`, `_app/public/index.php`, new bundle index-B3VwyDyG.js / index-Bwjvgua9.css, then index.html; previous bundle deleted. `/api/titles/78/extras` and `/trailers` answer 401 without session.
+
 ## Next step
-RDD assess S5, merge to main, deploy (upload `_app/src/TitleExtras.php`, `Trailers.php`, `Repository.php`, `_app/public/index.php`, web build; no SQL). Phone feedback still pending.
+Phone feedback from the group (S2 behavior on phones).
 <!-- previous: Feature complete; optional follow-ups: exclusion list for the 6 wrong version pairs, phone-width check of S2, review of the S4 slice. -->
 <!-- superseded: then the user decides delivery (push / merge / prod deploy with the runbook: backup, 010, upload api/ + web build, 009). -->
