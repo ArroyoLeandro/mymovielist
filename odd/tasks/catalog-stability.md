@@ -66,5 +66,8 @@ User report (2026-10-08): the site feels full of repeated movies/series. Audit o
 
 - Delivery (user authorized merge, push and deploy, 2026-10-08): `main` fast-forwarded to 6be1ee9 and pushed with `feat/catalog-stability`. S4 slice (287 lines, medium, under budget) delivered unreviewed. Prod: user exported backup (`backups/prod-20261008-1549-pre-catalog-stability.sql`, before 010) and ran 010 in phpMyAdmin (movie live 1209, movie animated 518, series 580, animated series 655, NULL 3 = titles added after the local copy, filled by the next sync). `deploy/build.sh` bundle uploaded file by file over the Hostinger TUS upload (backend, api shim, assets, .htaccess, index.html last; `_app/config/config.php`, sessions and caches untouched). Checks: site serves index-woMh7Oej.js, `/api/session`, `/api/titles/30/trailers`, `/versions` 401 without session, `_app/` 403. Probe file removed.
 
+- 009 applied in prod by the user (phpMyAdmin): check `0, 1, 0, 1`; watch_entries 3055 and watchlist 43 = backup counts (3058, 44) minus the merge conflicts computed from the backup (3 and 1): no user data lost.
+
 ## Next step
-User runs 009 in phpMyAdmin, then "Sincronizar todo" from /admin; then the user decides delivery (push / merge / prod deploy with the runbook: backup, 010, upload api/ + web build, 009).
+User runs "Sincronizar todo" from /admin (fills the 3 titles without `animated`, applies exclusions). Feature complete; optional follow-ups: exclusion list for the 6 wrong version pairs, phone-width check of S2, review of the S4 slice.
+<!-- superseded: then the user decides delivery (push / merge / prod deploy with the runbook: backup, 010, upload api/ + web build, 009). -->
