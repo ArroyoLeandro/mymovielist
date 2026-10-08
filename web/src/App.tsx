@@ -47,6 +47,7 @@ export default function App() {
           <NavLink to="/" className="brand" aria-label="MyMovieList, inicio"><img src="/mymovielist.png" alt="MyMovieList" width="163" height="34" /></NavLink>
           <nav className="nav-links" aria-label="Principal">
             <NavLink to="/" end>Inicio</NavLink>
+            <NavLink to="/catalogo">Catálogo</NavLink>
             <NavLink to="/estudios" className={({ isActive }) => (isActive || pathname.startsWith('/studio/') ? 'active' : '')}>Estudios</NavLink>
             <NavLink to="/ranking">Ranking</NavLink>
             <NavLink to={`/u/${user.tag}`}>Mi perfil</NavLink>
