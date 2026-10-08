@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { api, type ListEntry, type Profile as ProfileData, type Recommended, type TitleSummary } from '../api'
 import { useAuth } from '../auth'
+import Avatar from '../components/Avatar'
 import { ProviderStrip } from '../components/Providers'
 import Poster from '../components/Poster'
 import ScoreChart from '../components/ScoreChart'
@@ -35,8 +36,15 @@ const SORTS: Record<Sort, (a: ListEntry, b: ListEntry) => number> = {
 
 /** How long the "Deshacer" action stays available after dismissing a recommendation. */
 const UNDO_MS = 5000
+/** Studio progress rows shown before "Ver todos". */
+const STUDIOS_SHOWN = 6
 
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })
+/** Whole percent, but never "0%" for something that has started. */
+const percent = (n: number, total: number) => {
+  const p = total ? Math.round((n / total) * 100) : 0
+  return p === 0 && n > 0 ? '<1%' : `${p}%`
+}
 
 /**
  * Opens the title modal in place (no navigation to the catalog). The profile payload has no per-user state, so the
@@ -83,6 +91,49 @@ function TitleRow({ m, aside, done = false, children }: { m: TitleSummary; aside
   )
 }
 
+type StudioStat = ProfileData['stats']['byStudio'][number]
+
+/**
+ * Progress per studio, which doubles as the "Vistas" studio filter: picking a row filters the list, picking it again
+ * clears it. Full names wrap (never truncated); the top rows show first, the rest behind "Ver todos".
+ */
+function StudioProgress({ studios, value, onPick }: { studios: StudioStat[]; value: string; onPick: (slug: string) => void }) {
+  const [all, setAll] = useState(false)
+  // Collapsed, a picked studio from the tail stays visible so the pressed row never disappears.
+  const shown = all ? studios : studios.filter((s, i) => i < STUDIOS_SHOWN || s.slug === value)
+  return (
+    <section className="studio-progress" aria-labelledby="sp-title">
+      <div className="sp-head">
+        <h2 id="sp-title">Progreso por estudio</h2>
+        {value !== 'all' && <button type="button" className="btn btn-quiet btn-sm" onClick={() => onPick('all')}>Todos</button>}
+      </div>
+      <p className="sp-hint">Toca un estudio para ver solo esas vistas.</p>
+      <ul className="sp-list">
+        {shown.map((s) => (
+          <li key={s.slug}>
+            <button
+              type="button"
+              className="sp-row"
+              aria-pressed={value === s.slug}
+              aria-label={`${s.name}: ${s.watched} de ${s.total} vistas, ${percent(s.watched, s.total)}`}
+              onClick={() => onPick(value === s.slug ? 'all' : s.slug)}
+            >
+              <span className="sp-name">{s.name}</span>
+              <span className="sp-n"><b>{s.watched}</b>/{s.total} <em>{percent(s.watched, s.total)}</em></span>
+              <span className="sp-track" aria-hidden="true"><i style={{ width: `${s.total ? (s.watched / s.total) * 100 : 0}%` }} /></span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {studios.length > STUDIOS_SHOWN && (
+        <button type="button" className="btn btn-ghost btn-sm sp-more" aria-expanded={all} onClick={() => setAll((a) => !a)}>
+          {all ? 'Ver menos' : `Ver todos (${studios.length})`}
+        </button>
+      )}
+    </section>
+  )
+}
+
 export default function Profile() {
   const { tag = '' } = useParams()
   const { user } = useAuth()
@@ -100,6 +151,7 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
   const [kind, setKind] = useState<Kind>('all')
   const [sort, setSort] = useState<Sort>('score')
   const [closed, setClosed] = useState<Set<string>>(new Set())
+  const listTop = useRef<HTMLDivElement>(null)
   const [busy, setBusy] = useState<RowKey | null>(null)
   const [failed, setFailed] = useState(false)
   // Received recommendations dismissed in this session: hidden right away (optimistic), restored on undo or failure.
@@ -218,6 +270,18 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
 
   const { stats } = data
   const pct = stats.totalMovies ? Math.round((stats.watchedCount / stats.totalMovies) * 100) : 0
+  // Picking a studio filters "Vistas" and brings the list into view when it is below the fold.
+  const pickStudio = (slug: string) => {
+    setStudio(slug)
+    if (slug === 'all') return
+    setTab('vistas')
+    const top = listTop.current
+    if (top && top.getBoundingClientRect().top > window.innerHeight * 0.6) {
+      const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      top.scrollIntoView({ block: 'start', behavior: smooth ? 'smooth' : 'auto' })
+    }
+  }
+  const studioName = stats.byStudio.find((s) => s.slug === studio)?.name
   const dist = Array.from({ length: 10 }, (_, i) => stats.scoreDistribution[String(i + 1)] ?? 0)
   const toggle = (slug: string) =>
     setClosed((c) => {
@@ -228,27 +292,31 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
 
   return (
     <>
-      <header className="page-head">
-        <h1 className="title">{data.user.tag}</h1>
-        <p className="lead">{own ? 'Tu perfil: lo que viste, lo que tienes pendiente y lo que te recomendaron.' : 'Lo que vio y lo que tiene pendiente.'}</p>
+      <header className="page-head profile-head">
+        <Avatar tag={data.user.tag} className="profile-av" />
+        <div className="profile-who">
+          <h1 className="title">{data.user.tag}</h1>
+          <p className="lead">{own ? 'Tu perfil: lo que viste, lo que tienes pendiente y lo que te recomendaron.' : 'Lo que vio y lo que tiene pendiente.'}</p>
+        </div>
       </header>
-      <section className="stats">
-        <div className="stat"><b>{stats.watchedCount}<small>/{stats.totalMovies}</small></b><span>vistas &middot; {pct}%</span></div>
-        <div className="stat"><b>{stats.averageScore !== null ? stats.averageScore.toFixed(1) : '–'}</b><span>puntaje promedio</span></div>
-        <div className="score-panel"><ScoreChart counts={dist} average={stats.averageScore} /></div>
-        {stats.byStudio.length > 0 && (
-          <div className="studio-bars">
-            {stats.byStudio.map((s) => (
-              <div key={s.slug} className="sbar" title={`${s.name}: ${s.watched} de ${s.total}`}>
-                <span className="sbar-name">{s.name}</span>
-                <div className="sbar-track"><i style={{ width: `${s.total ? (s.watched / s.total) * 100 : 0}%` }} /></div>
-                <span className="sbar-n">{s.watched}/{s.total}</span>
-              </div>
-            ))}
+      <section className="overview" aria-label="Resumen">
+        <div className="ov-summary">
+          <div className="ov-figure">
+            <b>{stats.watchedCount}<small>/{stats.totalMovies}</small></b>
+            <span>vistas</span>
+            <span className="ov-meter" aria-hidden="true"><i style={{ width: `${pct}%` }} /></span>
+            <span className="ov-pct">{percent(stats.watchedCount, stats.totalMovies)} del catálogo</span>
           </div>
-        )}
+          <div className="ov-figure">
+            <b>{stats.averageScore !== null ? stats.averageScore.toFixed(1) : '–'}</b>
+            <span>puntaje promedio</span>
+          </div>
+        </div>
+        <ScoreChart counts={dist} average={stats.averageScore} />
       </section>
+      {stats.byStudio.length > 0 && <StudioProgress studios={stats.byStudio} value={studio} onPick={pickStudio} />}
 
+      <div ref={listTop} className="profile-anchor" />
       <Tabs label="Secciones del perfil" items={tabs} value={tab} onChange={setTab} className="profile-tabs" />
       {failed && <p className="error small" role="alert">No se pudo completar la acción. Inténtalo de nuevo.</p>}
       <div role="status">
@@ -268,15 +336,12 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
         ) : (
           <>
             <div className="profile-filters">
-              <div className="chip-list" role="group" aria-label="Filtrar por estudio">
-                <button type="button" className={`chip ${studio === 'all' ? 'on' : ''}`} aria-pressed={studio === 'all'} onClick={() => setStudio('all')}>Todos <small>{stats.watchedCount}</small></button>
-                {stats.byStudio.map((s) => (
-                  <button key={s.slug} type="button" className={`chip ${studio === s.slug ? 'on' : ''}`} aria-pressed={studio === s.slug} onClick={() => setStudio(s.slug)}>
-                    {s.name} <small>{s.watched}</small>
-                  </button>
-                ))}
-              </div>
               <div className="filters">
+                {studioName && (
+                  <button type="button" className="chip-q" onClick={() => setStudio('all')} aria-label={`Quitar el filtro de estudio ${studioName}`}>
+                    Filtrando: {studioName} <X size={14} aria-hidden="true" />
+                  </button>
+                )}
                 <select value={kind} onChange={(e) => setKind(e.target.value as Kind)} aria-label="Tipo">
                   <option value="all">Películas y series</option>
                   <option value="movie">Películas</option>

@@ -540,13 +540,47 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
    Lives in ranking.css (imported by pages/Ranking.tsx). */
 
 /* ---------- 13. Profile ---------- */
-.stats { display: grid; grid-template-columns: auto auto 1fr; gap: var(--s4); margin: var(--s5) 0 var(--s5); }
-.stat, .score-panel { padding: var(--s4) 22px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
-.stat { display: grid; align-content: center; min-width: 150px; }
-.stat b { font-family: var(--display); font-size: 2.4rem; font-weight: 800; line-height: 1; color: var(--gold); }
-.stat b small { color: var(--muted); font-size: 1.1rem; font-weight: 500; }
-.stat span { margin-top: 6px; color: var(--muted); font-size: 0.85rem; }
-.score-panel { min-width: 0; }
+.profile-head { display: flex; align-items: center; gap: var(--s4); }
+.profile-av { --av: 64px; }
+.profile-who { min-width: 0; }
+
+/* Overview: watched count and average on the left, the score chart on the right (stacked on phones). */
+.overview, .studio-progress { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+.overview {
+  display: grid; grid-template-columns: minmax(200px, 250px) minmax(0, 1fr); gap: var(--s5);
+  margin: var(--s5) 0 var(--s4); padding: 20px 22px;
+}
+.ov-summary { display: grid; align-content: center; gap: var(--s5); padding-right: var(--s5); border-right: 1px solid var(--line); }
+.ov-figure { display: grid; gap: 2px; min-width: 0; }
+.ov-figure b { font-family: var(--display); font-size: 2.4rem; font-weight: 800; line-height: 1; color: var(--gold); }
+.ov-figure b small { color: var(--muted); font-size: 1.1rem; font-weight: 500; }
+.ov-figure > span { color: var(--muted); font-size: 0.85rem; }
+.ov-meter { display: block; height: 6px; margin-top: var(--s2); overflow: hidden; border-radius: var(--r-pill); background: var(--panel-2); }
+.ov-meter i { display: block; height: 100%; border-radius: inherit; background: var(--gold); }
+.ov-figure > .ov-pct { color: var(--text); font-size: var(--fs-meta); }
+
+/* Studio progress, also the "Vistas" studio filter: each row is a toggle button; names wrap, never truncate. */
+.studio-progress { margin-bottom: var(--s5); padding: var(--s4) 22px; }
+.sp-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); min-height: 30px; }
+.sp-head h2 { font-size: 1.05rem; font-weight: 700; }
+.sp-hint { margin: 2px 0 var(--s3); color: var(--muted); font-size: var(--fs-meta); }
+.sp-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: 2px var(--s4); margin: 0; padding: 0; list-style: none; }
+.sp-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 6px var(--s3);
+  width: 100%; padding: 10px 12px; border: 1px solid transparent; border-radius: var(--r-md);
+  transition: background-color var(--fast), border-color var(--fast);
+}
+.sp-row:hover { background: var(--panel-2); }
+.sp-row[aria-pressed='true'] { border-color: var(--gold); background: var(--panel-2); }
+.sp-name { font-size: 0.92rem; font-weight: 600; overflow-wrap: anywhere; }
+.sp-n { color: var(--muted); font-size: var(--fs-meta); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sp-n b { color: var(--text); font-weight: 600; }
+.sp-n em { display: inline-block; min-width: 3.2em; color: var(--text); font-style: normal; text-align: right; }
+.sp-track { grid-column: 1 / -1; height: 6px; overflow: hidden; border-radius: var(--r-pill); background: var(--panel-2); }
+.sp-row:hover .sp-track, .sp-row[aria-pressed='true'] .sp-track { background: var(--raised); }
+.sp-track i { display: block; height: 100%; border-radius: inherit; background: var(--gold); }
+.sp-more { margin-top: var(--s3); }
+.profile-anchor { scroll-margin-top: var(--anchor-offset); }
 
 /* Score chart (components/ScoreChart): one hue, columns in a plot of definite height (--sc-h). The top padding is the
    room for the one direct label, so a full-height bar plus its label still ends inside the plot. */
@@ -593,14 +627,6 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
   position: absolute; top: 6px; left: clamp(28px, var(--at), calc(100% - 28px)); translate: -50% 0;
   color: var(--text); font-size: var(--fs-xs); font-weight: 600; white-space: nowrap;
 }
-.studio-bars {
-  grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 22px;
-  padding: 14px 22px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
-}
-.sbar { display: grid; grid-template-columns: 84px 1fr auto; align-items: center; gap: var(--s2); color: var(--muted); font-size: 0.78rem; }
-.sbar-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sbar-track { height: 6px; overflow: hidden; border-radius: 3px; background: var(--panel-2); }
-.sbar-track i { display: block; height: 100%; background: linear-gradient(90deg, var(--gold), var(--rose)); }
 .profile-tabs { margin-bottom: var(--s2); }
 .profile-filters { display: grid; gap: var(--s3); margin: var(--s4) 0 var(--s2); }
 .profile-filters .filters { flex-wrap: wrap; }
@@ -643,11 +669,15 @@ button.row-title { justify-self: start; padding: 0; border: 0; background: none;
 .reco-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
 .reco-head em { color: var(--muted); font-size: 0.85rem; font-style: normal; font-weight: 500; }
 @media (max-width: 719.98px) {
-  .stats { grid-template-columns: 1fr 1fr; }
-  .stat { min-width: 0; }
-  .score-panel { grid-column: 1 / -1; }
+  .overview { grid-template-columns: minmax(0, 1fr); gap: var(--s4); padding: var(--s4); }
+  .ov-summary { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s4); padding: 0 0 var(--s4); border-right: 0; border-bottom: 1px solid var(--line); }
+  .ov-figure b { font-size: 2rem; }
+  .ov-figure b small { font-size: 0.95rem; }
+  .studio-progress { padding: var(--s4); }
+  .sp-row { padding-inline: var(--s2); }
 }
 @media (max-width: 599.98px) {
+  .profile-av { --av: 52px; }
   .score-chart { --sc-h: 100px; }
   .list li { grid-template-columns: 52px minmax(0, 1fr); }
   .list li > .row-actions, .list li > .score-pill { grid-column: 2; justify-self: start; }
@@ -705,9 +735,9 @@ button.row-title { justify-self: start; padding: 0; border: 0; background: none;
 .sk-search { flex: 0 1 300px; height: 38px; margin-left: auto; border-radius: var(--r-pill); }
 .sk-seg { height: 40px; width: 260px; border-radius: var(--r-pill); }
 .sk-row { height: 70px; border-radius: var(--radius); }
-.sk-stat { height: 104px; min-width: 150px; border-radius: var(--radius); }
-.sk-stat.dist-sk { min-width: 0; }
-@media (max-width: 719.98px) { .sk-stat { min-width: 0; } } /* two 150px boxes overflowed 320px phones */
+.sk-overview { height: 222px; margin: var(--s5) 0 var(--s4); border-radius: var(--radius); }
+.sk-panel { height: 200px; margin-bottom: var(--s5); border-radius: var(--radius); }
+@media (max-width: 719.98px) { .sk-overview { height: 340px; } }
 .sk-brand { height: 28px; width: 140px; }
 .sk-pill { height: 34px; width: 84px; border-radius: var(--r-pill); }
 .sk-logo { height: 96px; border-radius: var(--r-md); }

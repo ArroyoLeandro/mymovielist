@@ -103,12 +103,15 @@ export function RankingSkeleton() {
 export function ProfileSkeleton() {
   return (
     <Busy label="Cargando perfil">
-      <Sk className="sk-title" style={{ maxWidth: 360 }} />
-      <section className="stats" aria-hidden="true">
-        <Sk className="sk-stat" />
-        <Sk className="sk-stat" />
-        <Sk className="sk-stat dist-sk" />
-      </section>
+      <div className="page-head profile-head" aria-hidden="true">
+        <Sk className="sk-av profile-av" />
+        <div className="profile-who" style={{ flex: 1 }}>
+          <Sk className="sk-title" />
+          <Sk className="sk-line" style={{ width: 'min(360px, 90%)', marginTop: 12 }} />
+        </div>
+      </div>
+      <Sk className="sk-overview" />
+      <Sk className="sk-panel" />
       <div className="list" aria-hidden="true">
         {Array.from({ length: 6 }, (_, i) => <Sk key={i} className="sk-row" />)}
       </div>

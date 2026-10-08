@@ -36,7 +36,7 @@ Rework the profile page (`/u/:tag`, own and other users) so it reads clearly at 
 ## Tasks
 
 - [x] P1 ScoreChart: new component replacing `.dist` in the profile; fixes overflow, adds counts/tooltip/average/a11y table. Route: delegated writer (2+ non-trivial files).
-- [ ] P2 Overview: header with avatar, overview panel, studio progress as the "Vistas" filter (chips removed). Route: delegated writer.
+- [x] P2 Overview: header with avatar, overview panel, studio progress as the "Vistas" filter (chips removed). Route: delegated writer.
 - [ ] P3 Lists and skeleton: divided rows, group header fix, `ProfileSkeleton` matches the new layout; phone and desktop screenshots. Route: delegated writer.
 
 ## Acceptance criteria
@@ -54,8 +54,9 @@ Rework the profile page (`/u/:tag`, own and other users) so it reads clearly at 
 ## Progress
 
 - 2026-10-08: document created after the profile modal fix (d1eeed3, deployed).
-- 2026-10-08: P1 done (delegated writer). `ScoreChart` replaces `.dist`: plot of definite height (120px, 100px on phones) with label headroom, single-hue bars (top score full `--gold`, others a dimmer mix of the same hue), count label on the top bucket only, full-height focusable columns with tooltip, average caret on the axis, empty-state message. Accessibility decision: each column is a focusable `role="img"` named "Puntaje N: X títulos", which serves as the table equivalent; a separate visually-hidden table was not added because it would either be read twice or require focusable content inside `aria-hidden`. Evidence: `npm run build` passes; headless Chrome against the local stack (Kanji1 637 vistas, rezak 4, Alonso 0) at 320/360/1280: no horizontal overflow, no chart element outside its panel (bounding-box check), tooltip visible on focus at both edges.
+- 2026-10-08: P1 done in 155be34 (delegated writer). `ScoreChart` replaces `.dist`: plot of definite height (120px, 100px on phones) with label headroom, single-hue bars (top score full `--gold`, others a dimmer mix of the same hue), count label on the top bucket only, full-height focusable columns with tooltip, average caret on the axis, empty-state message. Accessibility decision: each column is a focusable `role="img"` named "Puntaje N: X títulos", which serves as the table equivalent; a separate visually-hidden table was not added because it would either be read twice or require focusable content inside `aria-hidden`. Evidence: `npm run build` passes; headless Chrome against the local stack (Kanji1 637 vistas, rezak 4, Alonso 0) at 320/360/1280: no horizontal overflow, no chart element outside its panel (bounding-box check), tooltip visible on focus at both edges.
+- 2026-10-08: P2 done (delegated writer; commit hash recorded with P3). Header with `Avatar` (64px, 52px on phones) and the existing lead copy; one overview panel (watched/total with a solid gold meter and percent of the catalog, average score; `ScoreChart` on the right, stacked under 720px); "Progreso por estudio" rows with full wrapped names, watched/total and percent, top 6 plus "Ver todos (N)" / "Ver menos" (a picked studio from the tail stays visible when collapsed). Rows are `aria-pressed` toggles that set the studio filter and switch to "Vistas" (scrolling the tabs into view when they are below the fold); "Todos" in the panel header and a "Filtrando: <estudio> ×" chip in "Vistas" clear it. Chip wall removed; dead `.stats`/`.stat`/`.studio-bars`/`.sbar` CSS removed; `ProfileSkeleton` header and overview updated. Evidence: `npm run build` passes; screenshots (Kanji1, rezak) at 320/390/1280: no horizontal overflow, no chart element outside the overview panel; picking "Anime" from `?tab=pendientes` switched to "Vistas" with the pressed row and the filter chip.
 
 ## Next step
 
-- P2.
+- P3.
