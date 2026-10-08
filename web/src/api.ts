@@ -86,7 +86,8 @@ export interface HomeSaga { slug: string; name: string; posterUrl: string | null
 export type HomeRow =
   | { key: string; title: string; link: string | null; kind: 'titles'; items: StateTitle[] }
   | { key: string; title: string; link: string | null; kind: 'sagas'; items: HomeSaga[] }
-export interface TitlesPage { items: StateTitle[]; total: number; page: number; hasMore: boolean }
+/** One page of GET /api/titles; `nextCursor` (keyset, opaque) asks for the page after it, null on the last page. */
+export interface TitlesPage { items: StateTitle[]; total: number; hasMore: boolean; nextCursor: string | null }
 export interface TitleFilters {
   type?: string; studio?: string; decade?: string; status?: string; sort?: string; q?: string
   /** Comma-separated provider ids. */
@@ -220,10 +221,10 @@ export const api = {
   profile: (tag: string) => request<Profile>('GET', `/users/${encodeURIComponent(tag)}/profile`),
   users: () => request<string[]>('GET', '/users'),
   home: () => request<{ rows: HomeRow[] }>('GET', '/home'),
-  titles: (f: TitleFilters, page: number) => {
+  titles: (f: TitleFilters, cursor: string | null) => {
     const p = new URLSearchParams()
     Object.entries(f).forEach(([k, v]) => v && p.set(k, v))
-    p.set('page', String(page))
+    if (cursor) p.set('cursor', cursor)
     return request<TitlesPage>('GET', `/titles?${p}`)
   },
   providers: () => request<ProviderStat[]>('GET', '/providers?used=1'),

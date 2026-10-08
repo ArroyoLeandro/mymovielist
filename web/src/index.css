@@ -241,6 +241,7 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
 
 /* ---------- 6. Page ---------- */
 .page { max-width: var(--page-w); margin: 0 auto; padding: var(--s5) var(--gutter) 88px; }
+.page:focus, .page:focus-visible { outline: none; } /* focus fallback after a dialog, never a visible stop */
 .page-head { margin-bottom: var(--s4); }
 .title { font-size: var(--fs-page); font-weight: 800; letter-spacing: -0.02em; overflow-wrap: anywhere; }
 .lead { margin: 6px 0 0; color: var(--muted); }
@@ -471,7 +472,9 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
   .bar-name span:last-child { color: var(--muted); font-family: var(--body); font-size: var(--fs-meta); font-weight: 500; }
 }
 .filters { display: flex; flex-wrap: wrap; gap: var(--s2); }
-.results { margin-top: var(--s3); }
+.results { margin-top: var(--s3); scroll-margin-top: var(--anchor-offset); transition: opacity var(--fast); }
+/* A new filter is loading: the previous grid stays, dimmed and inert, instead of collapsing to a skeleton. */
+.results.is-switching { opacity: 0.5; pointer-events: none; }
 .chip-q { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border: 1px solid var(--gold); border-radius: var(--r-pill); background: var(--panel-2); font-size: 0.85rem; }
 .chip-q:hover { background: var(--raised); }
 /* Phones and narrow tablets: search on its own row, every other control on one swipeable line
@@ -575,6 +578,8 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
 .reco-tools { display: flex; justify-content: flex-end; margin: var(--s2) 0; }
 .reco-dismiss { width: 30px; padding: 0; justify-content: center; border-radius: 50%; }
 .tag.muted-tag { border-style: dashed; opacity: 0.8; }
+/* Profile rows acted upon in this visit stay in place (no reflow under the pointer) until the next visit. */
+.list li.is-done .thumb, .list li.is-done .info { opacity: 0.6; }
 /* "Deshacer" after dismissing a recommendation: floating, announced through the role="status" wrapper. */
 .undo-toast {
   position: fixed; left: 50%; bottom: var(--s4); translate: -50% 0; z-index: 40;

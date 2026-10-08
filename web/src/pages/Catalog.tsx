@@ -15,6 +15,7 @@ import Tabs, { type TabItem } from '../components/Tabs'
 import TitleCard, { type PendingFn, type SaveFn } from '../components/TitleCard'
 import { matchesProviders, ProviderDictContext, type PType } from '../lib/providers'
 import { blankRow, isEmptyRow, patchEntry, upsertRow } from '../lib/ratings'
+import { patchTitle } from '../lib/titleCache'
 import { useCatalog } from '../queries'
 
 type Filter = 'all' | 'watched' | 'unwatched'
@@ -76,19 +77,30 @@ function CatalogView({ slug }: { slug: string }) {
       if (qc.isMutating({ mutationKey: entryKey }) <= 1) {
         qc.setQueryData<RatingRow[]>(ratingsKey, (rows) => patchRows(rows ?? [], v.movieId, me, entry.watched, entry.score))
       }
+      // Same title in the global lists (home, /catalogo, search): patched in place, refetched on their next visit.
+      patchTitle(qc, v.movieId, (row) => patchEntry(row, me, entry.watched, entry.score))
     },
     onSettled: () => {
       // Once every in-flight save is done, refresh community stats and the home progress.
       if (qc.isMutating({ mutationKey: entryKey }) <= 1) {
         void qc.invalidateQueries({ queryKey: ratingsKey })
-        for (const k of ['progress', 'home', 'titles', 'profile']) void qc.invalidateQueries({ queryKey: [k] })
+        void qc.invalidateQueries({ queryKey: ['progress'] })
+        for (const k of ['home', 'titles', 'search', 'profile']) void qc.invalidateQueries({ queryKey: [k], refetchType: 'none' })
       }
     },
   })
+  // Titles acted upon stay visible under the current filter ("Sin ver" keeps a title just marked as watched) until
+  // the filter, search or tab changes: the grid never drops a card under the user.
+  const [kept, setKept] = useState<ReadonlySet<number>>(new Set())
+  const keep = useCallback((movieId: number) => setKept((k) => (k.has(movieId) ? k : new Set(k).add(movieId))), [])
+
   const { mutateAsync } = save
   const onSave = useCallback<SaveFn>(
-    (movieId, watched, score) => mutateAsync({ movieId, watched, score }).then(() => true, () => false),
-    [mutateAsync],
+    (movieId, watched, score) => {
+      keep(movieId)
+      return mutateAsync({ movieId, watched, score }).then(() => true, () => false)
+    },
+    [mutateAsync, keep],
   )
 
   const pend = useMutation({
@@ -102,15 +114,19 @@ function CatalogView({ slug }: { slug: string }) {
     onError: (_e, v, ctx) => {
       qc.setQueryData<RatingRow[]>(ratingsKey, (rows) => restoreRow(rows ?? [], v.movieId, ctx?.prev))
     },
+    onSuccess: (_r, v) => patchTitle(qc, v.movieId, (row) => ({ ...row, pending: v.pending })),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: ratingsKey })
-      for (const k of ['home', 'titles', 'profile']) void qc.invalidateQueries({ queryKey: [k] })
+      for (const k of ['home', 'titles', 'search', 'profile']) void qc.invalidateQueries({ queryKey: [k], refetchType: 'none' })
     },
   })
   const { mutateAsync: mutatePending } = pend
   const onPending = useCallback<PendingFn>(
-    (movieId, pending) => mutatePending({ movieId, pending }).then(() => true, () => false),
-    [mutatePending],
+    (movieId, pending) => {
+      keep(movieId)
+      return mutatePending({ movieId, pending }).then(() => true, () => false)
+    },
+    [mutatePending, keep],
   )
 
   const [query, setQuery] = useState('')
@@ -123,6 +139,7 @@ function CatalogView({ slug }: { slug: string }) {
     setProvSel(ids)
     if (ids.length === 0) setPtype('')
   }, [])
+  useEffect(() => setKept(new Set()), [query, filter, provSel, ptype])
   // Sections always start expanded; collapsing is per visit and resets when the studio changes.
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
@@ -226,7 +243,7 @@ function CatalogView({ slug }: { slug: string }) {
   const searching = q !== '' || filter !== 'all' || provSet.size > 0
   const visible = (m: Movie) => {
     const watched = byId.get(m.id)?.watched ?? false
-    return (filter === 'all' || (filter === 'watched') === watched) && (!q || haystack.get(m.id)!.includes(q))
+    return (filter === 'all' || (filter === 'watched') === watched || kept.has(m.id)) && (!q || haystack.get(m.id)!.includes(q))
       && matchesProviders(m.providers, provSet, ptype)
   }
 
@@ -257,7 +274,7 @@ function CatalogView({ slug }: { slug: string }) {
   }
   const allCollapsed = viewSections.every((s) => collapsed.has(s.slug))
   const card = (m: Movie, sectionName?: string) => (
-    <TitleCard key={m.id} movie={m} r={byId.get(m.id)} me={me} onSave={onSave} onPending={onPending} studioName={studioName} sectionName={sectionName ?? sectionOf.get(m.id)?.name} />
+    <TitleCard key={m.id} movie={m} r={byId.get(m.id)} onSave={onSave} onPending={onPending} studioName={studioName} sectionName={sectionName ?? sectionOf.get(m.id)?.name} />
   )
 
   return (

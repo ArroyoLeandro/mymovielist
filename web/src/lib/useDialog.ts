@@ -5,6 +5,8 @@ const FOCUSABLE = 'a[href], button:not(:disabled):not([tabindex="-1"]), textarea
 /**
  * Modal dialog behavior: locks page scroll, moves focus into the dialog and back to the opener on close,
  * closes on Escape and keeps Tab inside. `paused` hands the keyboard to a dialog stacked on top.
+ * Focus returns without scrolling (the opener's card may have moved meanwhile); when the opener is gone, it goes to
+ * the same card if it was rendered again, else to <main>.
  */
 export function useDialog(ref: RefObject<HTMLElement | null>, onClose: () => void, paused = false) {
   const closeRef = useRef(onClose)
@@ -13,12 +15,27 @@ export function useDialog(ref: RefObject<HTMLElement | null>, onClose: () => voi
 
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null
+    const card = opener?.closest<HTMLElement>('.card[id]')?.id
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     ref.current?.focus()
     return () => {
       document.body.style.overflow = prev
-      if (opener?.isConnected) opener.focus()
+      if (opener?.isConnected) {
+        opener.focus({ preventScroll: true })
+        return
+      }
+      const again = card ? document.getElementById(card)?.querySelector<HTMLElement>(FOCUSABLE) : null
+      if (again) {
+        again.focus({ preventScroll: true })
+        return
+      }
+      const main = document.querySelector<HTMLElement>('main')
+      if (main && !main.hasAttribute('tabindex')) {
+        main.tabIndex = -1 // focusable only for this hand-back, so clicks on the page never focus it
+        main.addEventListener('blur', () => main.removeAttribute('tabindex'), { once: true })
+      }
+      main?.focus({ preventScroll: true })
     }
   }, [ref])
 

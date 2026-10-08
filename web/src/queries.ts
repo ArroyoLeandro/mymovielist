@@ -1,5 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
-import { api } from './api'
+import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import { api, type TitleFilters } from './api'
 
 const HOUR = 60 * 60 * 1000
 
@@ -26,11 +26,32 @@ export const useHighlights = () =>
 export const useUsers = () =>
   useQuery({ queryKey: ['users'], queryFn: api.users, staleTime: 5 * 60 * 1000 })
 
-// Global pages are dynamic: refetched on mount/focus and after every mutation, never on a timer (a poll arriving
-// mid-edit would overwrite an optimistic change).
-export const useHome = () => useQuery({ queryKey: ['home'], queryFn: api.home })
+// Global pages are dynamic but their lists stay put while they are on screen: refetched on mount (every visit), never
+// on a timer or on window focus (a refetch would reorder or drop cards under the user). Card actions patch the
+// cached titles in place instead (lib/titleCache.ts).
+export const useHome = () => useQuery({ queryKey: ['home'], queryFn: api.home, refetchOnWindowFocus: false })
 
-export const useProfile = (tag: string) => useQuery({ queryKey: ['profile', tag], queryFn: () => api.profile(tag) })
+export const useProfile = (tag: string) =>
+  useQuery({ queryKey: ['profile', tag], queryFn: () => api.profile(tag), refetchOnWindowFocus: false })
+
+/**
+ * /catalogo grid, 60 titles per page (keyset cursor). Kept 30 min so back navigation finds every loaded page (the
+ * scroll position can be restored); fresh for 1 min, so coming straight back does not refetch and reshuffle it.
+ * Never refetched on focus or reconnect: that refetches every loaded page and can reorder what is on screen.
+ * While a new filter loads, the previous grid stays (dimmed) instead of collapsing to a skeleton.
+ */
+export const useTitlesList = (filters: TitleFilters) =>
+  useInfiniteQuery({
+    queryKey: ['titles', filters],
+    queryFn: ({ pageParam }) => api.titles(filters, pageParam),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => (last.hasMore ? last.nextCursor : null),
+    placeholderData: keepPreviousData,
+    staleTime: 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  })
 
 export const useSearch = (q: string) =>
   useQuery({ queryKey: ['search', q], queryFn: () => api.search(q), enabled: q.length >= 2, staleTime: 15000, placeholderData: (prev) => prev })
@@ -40,5 +61,7 @@ export const useSearch = (q: string) =>
 export const useTmdbSearch = (q: string, enabled = true) =>
   useQuery({ queryKey: ['tmdb', q], queryFn: () => api.tmdbSearch(q), enabled: enabled && q.length >= 2, staleTime: 10 * 60 * 1000, retry: false })
 
-/** Queries holding per-user title state; invalidated after any mutation. */
-export const DYNAMIC_KEYS = ['home', 'titles', 'search', 'profile', 'progress', 'ratings', 'highlights', 'ranking'] as const
+/** Queries listing titles with per-user state: patched in place after an action, refetched on the next visit. */
+export const LIST_KEYS = ['home', 'titles', 'search', 'profile', 'ratings'] as const
+/** Counters and rankings (no title cards): refetched right away after an action. */
+export const STAT_KEYS = ['progress', 'highlights', 'ranking'] as const

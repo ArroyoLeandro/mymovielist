@@ -1,11 +1,12 @@
-import { memo, useState } from 'react'
+import { memo, useContext, useEffect, useRef, useState } from 'react'
 import { Plus, Check, Bookmark, BookmarkCheck, Send, ChevronRight } from 'lucide-react'
 import type { Availability, RatingRow, TitleSummary } from '../api'
+import { ProviderDictContext } from '../lib/providers'
 import { useTitleActions } from '../lib/useTitleActions'
 import Poster from './Poster'
 import { ProviderStrip } from './Providers'
 import RecommendModal from './RecommendModal'
-import TitleModal from './TitleModal'
+import { useTitleDetail } from './TitleDetail'
 
 export type SaveFn = (movieId: number, watched: boolean, score: number | null) => Promise<boolean>
 export type PendingFn = (movieId: number, pending: boolean) => Promise<boolean>
@@ -17,23 +18,36 @@ export type CardMovie = Pick<TitleSummary, 'id' | 'title' | 'originalTitle' | 'y
 /**
  * Compact title card: poster with icon actions (watched, wishlist, recommend), title/year, where to watch (logo row)
  * and a one-line group summary.
- * Scoring and the per-friend ratings live in the detail modal (TitleModal).
+ * Scoring and the per-friend ratings live in the detail modal (TitleModal), hosted by TitleDetailProvider so it
+ * survives the card leaving its list; the card keeps it fed with fresh state while both are on screen.
  */
-const TitleCard = memo(function TitleCard({ movie: m, r, me, onSave, onPending, label, studioName, sectionName }: {
-  movie: CardMovie; r: RatingRow | undefined; me: string; onSave: SaveFn; onPending: PendingFn
+const TitleCard = memo(function TitleCard({ movie: m, r, onSave, onPending, label, studioName, sectionName }: {
+  movie: CardMovie; r: RatingRow | undefined; onSave: SaveFn; onPending: PendingFn
   label?: string; studioName?: string; sectionName?: string
 }) {
   const { watched, pending, score, failed, toggleWatched, wish } = useTitleActions(m.id, r, onSave, onPending)
   const watchersCount = r?.watchersCount ?? 0
-  const [detail, setDetail] = useState(false)
   const [recommending, setRecommending] = useState(false)
+  const detail = useTitleDetail()
+  const dict = useContext(ProviderDictContext)
+  const [open, setOpen] = useState(false)
+  const token = useRef(0)
+  const openDetail = () => {
+    token.current = detail.open({
+      movie: m, r, onSave, onPending, studioName: studioName ?? label, sectionName, dict, onClosed: () => setOpen(false),
+    })
+    setOpen(true)
+  }
+  useEffect(() => {
+    if (open) detail.update(token.current, { r, onSave, onPending })
+  }, [open, r, onSave, onPending, detail])
 
   return (
     <article className={`card ${watched ? 'seen' : ''}`} id={`t-${m.id}`}>
       <div className="art">
         <Poster url={m.posterUrl} title={m.title} />
         {/* Mouse/touch convenience; keyboard and screen-reader users open the detail from the title or summary. */}
-        <button type="button" className="art-open" tabIndex={-1} aria-hidden="true" onClick={() => setDetail(true)} />
+        <button type="button" className="art-open" tabIndex={-1} aria-hidden="true" onClick={openDetail} />
         {m.mediaType === 'series' && <span className="badge">Serie</span>}
         {score !== null && <span className="my-score" title="Tu puntaje">★ {score}</span>}
         <div className="art-actions">
@@ -71,10 +85,10 @@ const TitleCard = memo(function TitleCard({ movie: m, r, me, onSave, onPending, 
           </button>
         </div>
       </div>
-      <h3><button type="button" className="title-open" aria-haspopup="dialog" onClick={() => setDetail(true)}>{m.title}</button></h3>
+      <h3><button type="button" className="title-open" aria-haspopup="dialog" onClick={openDetail}>{m.title}</button></h3>
       <p className="year">{m.year}{label ? ` · ${label}` : ''}</p>
       <ProviderStrip refs={m.providers} />
-      <button type="button" className="summary" aria-haspopup="dialog" onClick={() => setDetail(true)}>
+      <button type="button" className="summary" aria-haspopup="dialog" onClick={openDetail}>
         <span className="sum-stats">
           {watchersCount === 0 ? 'Nadie la vio todavía' : (
             <>{r?.averageScore != null && <b>★ {r.averageScore.toFixed(1)} · </b>}{watchersCount === 1 ? '1 la vio' : `${watchersCount} la vieron`}</>
@@ -83,13 +97,6 @@ const TitleCard = memo(function TitleCard({ movie: m, r, me, onSave, onPending, 
         <span className="more">{watchersCount === 0 ? 'Puntuar' : 'Ver puntuaciones'}<ChevronRight size={12} aria-hidden="true" /></span>
       </button>
       {failed && <p className="error small" role="alert">No se pudo guardar. Inténtalo de nuevo.</p>}
-      {detail && (
-        <TitleModal
-          movie={m} r={r} me={me} onSave={onSave} onPending={onPending}
-          studioName={studioName ?? label} sectionName={sectionName}
-          paused={recommending} onRecommend={() => setRecommending(true)} onClose={() => setDetail(false)}
-        />
-      )}
       {recommending && <RecommendModal movieId={m.id} title={m.title} onClose={() => setRecommending(false)} />}
     </article>
   )

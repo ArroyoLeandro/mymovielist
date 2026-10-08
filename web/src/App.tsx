@@ -14,6 +14,7 @@ import { Toaster } from './lib/toast'
 import { AppSkeleton } from './components/Skeleton'
 import SearchBox from './components/SearchBox'
 import { BackButton, ScrollManager, ToTopButton } from './components/Scroll'
+import { TitleDetailProvider } from './components/TitleDetail'
 
 // Old links (/studios/:slug) keep working.
 function LegacyStudioRedirect() {
@@ -63,17 +64,19 @@ export default function App() {
       <ScrollManager />
       <main className="page">
         <BackButton />
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/estudios" element={<Studios />} />
-          <Route path="/catalogo" element={<Browse />} />
-          <Route path="/studio/:slug" element={<Catalog />} />
-          <Route path="/studios/:slug" element={<LegacyStudioRedirect />} />
-          <Route path="/ranking" element={<Ranking />} />
-          <Route path="/u/:tag" element={<Profile />} />
-          <Route path="/admin" element={<Admin />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <TitleDetailProvider>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/estudios" element={<Studios />} />
+            <Route path="/catalogo" element={<Browse />} />
+            <Route path="/studio/:slug" element={<Catalog />} />
+            <Route path="/studios/:slug" element={<LegacyStudioRedirect />} />
+            <Route path="/ranking" element={<Ranking />} />
+            <Route path="/u/:tag" element={<Profile />} />
+            <Route path="/admin" element={<Admin />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </TitleDetailProvider>
       </main>
       <ToTopButton />
       <Toaster />

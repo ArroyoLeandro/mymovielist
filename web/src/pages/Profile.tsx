@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { api, type ListEntry, type Profile as ProfileData, type TitleSummary } from '../api'
+import { api, type ListEntry, type Profile as ProfileData, type Recommended, type TitleSummary } from '../api'
 import { useAuth } from '../auth'
 import { ProviderStrip } from '../components/Providers'
 import Poster from '../components/Poster'
@@ -10,11 +10,15 @@ import { Bookmark, Eye, Inbox, Send, X } from 'lucide-react'
 import { ProfileSkeleton } from '../components/Skeleton'
 import { EmptyState, ErrorState } from '../components/States'
 import Tabs, { type TabItem } from '../components/Tabs'
-import { DYNAMIC_KEYS, useProfile } from '../queries'
+import { patchEntry } from '../lib/ratings'
+import { patchTitle, settleAfterAction } from '../lib/titleCache'
+import { useProfile } from '../queries'
 
 type Sort = 'score' | 'title' | 'year' | 'recent'
 type Kind = 'all' | 'movie' | 'series'
 type Tab = 'vistas' | 'pendientes' | 'recomendadas' | 'mis-recomendaciones'
+/** What an action did to a row in this visit: the row stays in place, marked, until the next visit. */
+type Done = 'watched' | 'removed' | 'deleted'
 
 const SORTS: Record<Sort, (a: ListEntry, b: ListEntry) => number> = {
   score: (a, b) => (b.score ?? -1) - (a.score ?? -1) || a.movie.title.localeCompare(b.movie.title),
@@ -29,9 +33,9 @@ const UNDO_MS = 5000
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })
 
 /** One title row: thumb, linked title, tags, plus whatever the tab needs on the right and below. */
-function TitleRow({ m, aside, children }: { m: TitleSummary; aside?: ReactNode; children?: ReactNode }) {
+function TitleRow({ m, aside, done = false, children }: { m: TitleSummary; aside?: ReactNode; done?: boolean; children?: ReactNode }) {
   return (
-    <li>
+    <li className={done ? 'is-done' : undefined}>
       <Poster url={m.posterUrl} title={m.title} className="thumb" />
       <div className="info">
         <Link to={`/studio/${m.studio.slug}?t=${m.id}`} className="row-title">{m.title}</Link>
@@ -75,8 +79,18 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
   const dismissing = useRef<Promise<unknown>>(Promise.resolve())
   useEffect(() => () => window.clearTimeout(undoTimer.current), [])
 
-  const received = (data.recommendedToMe ?? []).filter((r) => !hidden.has(r.id))
-  const receivedSeen = received.filter((r) => r.watched)
+  // Received recommendations, one row per title (several friends can recommend the same one), newest first.
+  const received = useMemo(() => {
+    const byTitle = new Map<number, { movie: TitleSummary; recos: Recommended[] }>()
+    for (const r of data.recommendedToMe ?? []) {
+      if (hidden.has(r.id)) continue
+      const g = byTitle.get(r.movie.id)
+      if (g) g.recos.push(r)
+      else byTitle.set(r.movie.id, { movie: r.movie, recos: [r] })
+    }
+    return [...byTitle.values()].map((g) => ({ ...g, ids: g.recos.map((r) => r.id), watched: g.recos[0].watched, pending: g.recos[0].pending }))
+  }, [data.recommendedToMe, hidden])
+  const receivedSeen = received.filter((g) => g.watched)
   const sent = data.myRecommendations ?? []
   const tabs: TabItem<Tab>[] = [
     { id: 'vistas', label: 'Vistas', count: data.stats.watchedCount },
@@ -97,21 +111,33 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
     setParams(next, { replace: true })
   }
 
-  // Runs a mutation, then refreshes every query holding per-user title state (including this profile).
-  const act = async (key: number, fn: () => Promise<unknown>) => {
+  // Rows acted upon in this visit (keyed like `busy`): they stay where they are, marked, until the next visit.
+  const [done, setDone] = useState<Map<number, Done>>(new Map())
+  // Runs a mutation; the lists are not refetched now (nothing moves under the user), only on their next visit.
+  const act = async (key: number, fn: () => Promise<unknown>, outcome?: Done) => {
     setBusy(key)
     setFailed(false)
     try {
       await fn()
-      await Promise.all(DYNAMIC_KEYS.map((k) => qc.invalidateQueries({ queryKey: [k] })))
+      if (outcome) setDone((d) => new Map(d).set(key, outcome))
+      settleAfterAction(qc)
     } catch {
       setFailed(true)
     } finally {
       setBusy(null)
     }
   }
+  // Own profile only, so the viewer is this profile's user. Patches the title's state in every cached list.
+  const markWatched = (id: number) => async () => {
+    const e = await api.saveEntry(id, true, null)
+    patchTitle(qc, id, (row) => patchEntry(row, data.user.tag, e.watched, e.score))
+  }
+  const setPending = (id: number, pending: boolean) => async () => {
+    await api.setPending(id, pending)
+    patchTitle(qc, id, (row) => ({ ...row, pending }))
+  }
 
-  const refresh = () => Promise.all(DYNAMIC_KEYS.map((k) => qc.invalidateQueries({ queryKey: [k] })))
+  const refresh = async () => settleAfterAction(qc)
   const setHiddenIds = (ids: number[], on: boolean) =>
     setHidden((h) => {
       const n = new Set(h)
@@ -289,10 +315,19 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
               <TitleRow
                 key={m.id}
                 m={m}
+                done={done.has(m.id)}
                 aside={own && (
                   <span className="row-actions">
-                    <button type="button" className="btn btn-primary btn-sm" disabled={busy === m.id} onClick={() => void act(m.id, () => api.saveEntry(m.id, true, null))}>La vi</button>
-                    <button type="button" className="btn btn-ghost btn-sm" disabled={busy === m.id} onClick={() => void act(m.id, () => api.setPending(m.id, false))}>Quitar</button>
+                    {done.get(m.id) === 'watched' ? (
+                      <span className="tag ok">Vista ✓</span>
+                    ) : done.get(m.id) === 'removed' ? (
+                      <span className="tag muted-tag">Quitada de pendientes</span>
+                    ) : (
+                      <>
+                        <button type="button" className="btn btn-primary btn-sm" disabled={busy === m.id} onClick={() => void act(m.id, markWatched(m.id), 'watched')}>La vi</button>
+                        <button type="button" className="btn btn-ghost btn-sm" disabled={busy === m.id} onClick={() => void act(m.id, setPending(m.id, false), 'removed')}>Quitar</button>
+                      </>
+                    )}
                   </span>
                 )}
               >
@@ -322,7 +357,7 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
                 type="button"
                 className="btn btn-ghost btn-sm"
                 onClick={() => dismiss(
-                  receivedSeen.map((r) => r.id),
+                  receivedSeen.flatMap((g) => g.ids),
                   receivedSeen.length === 1 ? 'Quitaste 1 recomendación que ya viste.' : `Quitaste ${receivedSeen.length} recomendaciones que ya viste.`,
                 )}
               >
@@ -331,39 +366,43 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
             </div>
           )}
           <ul className="list">
-            {received.map((r) => (
+            {received.map((g) => (
               <TitleRow
-                key={r.id}
-                m={r.movie}
+                key={g.movie.id}
+                m={g.movie}
                 aside={
                   <span className="row-actions">
-                    {r.watched ? (
+                    {g.watched ? (
                       <span className="tag ok">Ya la viste ✓</span>
                     ) : (
                       <>
-                        {r.pending ? (
+                        {g.pending ? (
                           <span className="tag">En pendientes</span>
                         ) : (
-                          <button type="button" className="btn btn-ghost btn-sm" disabled={busy === r.id} onClick={() => void act(r.id, () => api.setPending(r.movie.id, true))}>Quiero verla</button>
+                          <button type="button" className="btn btn-ghost btn-sm" disabled={busy === g.movie.id} onClick={() => void act(g.movie.id, setPending(g.movie.id, true))}>Quiero verla</button>
                         )}
-                        <button type="button" className="btn btn-primary btn-sm" disabled={busy === r.id} onClick={() => void act(r.id, () => api.saveEntry(r.movie.id, true, null))}>La vi</button>
+                        <button type="button" className="btn btn-primary btn-sm" disabled={busy === g.movie.id} onClick={() => void act(g.movie.id, markWatched(g.movie.id))}>La vi</button>
                       </>
                     )}
                     <button
                       type="button"
                       className="btn btn-quiet btn-sm reco-dismiss"
                       title="Quitar de mis recomendaciones"
-                      aria-label={`Quitar ${r.movie.title} (de @${r.from}) de mis recomendaciones`}
-                      disabled={busy === r.id}
-                      onClick={() => dismiss([r.id], `Quitaste «${r.movie.title}» de tus recomendaciones.`)}
+                      aria-label={`Quitar ${g.movie.title} (de ${g.recos.map((r) => `@${r.from}`).join(', ')}) de mis recomendaciones`}
+                      disabled={busy === g.movie.id}
+                      onClick={() => dismiss(g.ids, `Quitaste «${g.movie.title}» de tus recomendaciones.`)}
                     >
                       <X size={16} aria-hidden="true" />
                     </button>
                   </span>
                 }
               >
-                <span className="reco-from">de <b>@{r.from}</b> &middot; {fmtDate(r.createdAt)}</span>
-                {r.note && <q className="reco-note">{r.note}</q>}
+                <span className="reco-from">
+                  de {g.recos.map((r, i) => <Fragment key={r.id}>{i > 0 && ', '}<b>@{r.from}</b></Fragment>)} &middot; {fmtDate(g.recos[0].createdAt)}
+                </span>
+                {g.recos.filter((r) => r.note).map((r) => (
+                  <q key={r.id} className="reco-note">{g.recos.length > 1 && <b>@{r.from}: </b>}{r.note}</q>
+                ))}
               </TitleRow>
             ))}
           </ul>
@@ -387,6 +426,7 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
                     <TitleRow
                       key={i.id}
                       m={i.movie}
+                      done={done.has(i.id)}
                       aside={
                         <span className="row-actions">
                           {i.watched ? (
@@ -395,7 +435,11 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
                             <span className="tag">Pendiente</span>
                           )}
                           {i.dismissed && <span className="tag muted-tag" title={`@${g.toTag} la quitó de sus recomendaciones`}>Descartada</span>}
-                          <button type="button" className="btn btn-ghost btn-sm" disabled={busy === i.id} onClick={() => void act(i.id, () => api.deleteRecommendation(i.id))} aria-label={`Eliminar la recomendación de ${i.movie.title} a @${g.toTag}`}>Eliminar</button>
+                          {done.get(i.id) === 'deleted' ? (
+                            <span className="tag muted-tag">Eliminada</span>
+                          ) : (
+                            <button type="button" className="btn btn-ghost btn-sm" disabled={busy === i.id} onClick={() => void act(i.id, () => api.deleteRecommendation(i.id), 'deleted')} aria-label={`Eliminar la recomendación de ${i.movie.title} a @${g.toTag}`}>Eliminar</button>
+                          )}
                         </span>
                       }
                     >

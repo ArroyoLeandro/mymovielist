@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { useSearchParams } from 'react-router-dom'
-import { useInfiniteQuery } from '@tanstack/react-query'
-import { api, type TitleFilters } from '../api'
+import { useNavigationType, useSearchParams } from 'react-router-dom'
+import type { StateTitle, TitleFilters } from '../api'
 import { useAuth } from '../auth'
 import LiveCard from '../components/LiveCard'
 import { SearchX, X } from 'lucide-react'
@@ -11,8 +10,9 @@ import ProviderPicker, { type PickerOption } from '../components/ProviderPicker'
 import { ProviderLogo } from '../components/Providers'
 import StickyBar from '../components/StickyBar'
 import { TmdbPanel } from '../components/TmdbResults'
+import { scrollBehavior } from '../lib/motion'
 import { parseIds, parsePType, PTYPES, type PType } from '../lib/providers'
-import { useProviders, useStudios } from '../queries'
+import { useProviders, useStudios, useTitlesList } from '../queries'
 
 const DECADES = [2020, 2010, 2000, 1990, 1980, 1970, 1960, 1950, 1940, 1930]
 const SORTS: [string, string][] = [
@@ -72,26 +72,58 @@ export default function Browse() {
   )
   const optionById = useMemo(() => new Map(options.map((o) => [o.id, o])), [options])
 
-  const list = useInfiniteQuery({
-    queryKey: ['titles', filters],
-    queryFn: ({ pageParam }) => api.titles(filters, pageParam),
-    initialPageParam: 1,
-    getNextPageParam: (last) => (last.hasMore ? last.page + 1 : undefined),
-  })
+  const list = useTitlesList(filters)
+  // Previous filter's grid, shown dimmed while the new one loads.
+  const switching = list.isPlaceholderData
 
   // Infinite scroll: load the next page when the sentinel gets close to the viewport.
   const sentinel = useRef<HTMLDivElement>(null)
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = list
   useEffect(() => {
     const el = sentinel.current
-    if (!el || !hasNextPage) return
+    if (!el || !hasNextPage || switching) return
     const io = new IntersectionObserver((e) => e[0].isIntersecting && !isFetchingNextPage && void fetchNextPage(), { rootMargin: '700px' })
     io.observe(el)
     return () => io.disconnect()
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, switching])
 
-  const items = list.data?.pages.flatMap((p) => p.items) ?? []
-  const total = list.data?.pages[0]?.total
+  // Pages are keyset-paginated, so the server does not resend titles; a title whose rank dropped while the user
+  // scrolled can still come back on a later page: keep its first copy only.
+  const pages = list.data?.pages
+  const items = useMemo(() => {
+    const seen = new Set<number>()
+    const out: StateTitle[] = []
+    for (const p of pages ?? []) {
+      for (const t of p.items) {
+        if (!seen.has(t.id)) {
+          seen.add(t.id)
+          out.push(t)
+        }
+      }
+    }
+    return out
+  }, [pages])
+  const total = pages?.[0]?.total
+
+  // A new filter, sort or search starts at the top of the results once they arrive (back/forward restores the old
+  // position instead). The results begin right under the filters, so this is the page top: aiming at the grid itself
+  // lands short or long, as the sticky filter bar changes height when it unsticks.
+  const results = useRef<HTMLDivElement>(null)
+  const navType = useNavigationType()
+  const filterKey = JSON.stringify(filters)
+  const shownKey = useRef(filterKey)
+  const scrollPending = useRef(false)
+  useEffect(() => {
+    if (shownKey.current !== filterKey) {
+      shownKey.current = filterKey
+      scrollPending.current = navType !== 'POP'
+    }
+    const el = results.current
+    if (!scrollPending.current || switching || !el) return
+    scrollPending.current = false
+    const margin = parseFloat(getComputedStyle(el).scrollMarginTop) || 0
+    if (el.getBoundingClientRect().top < margin) window.scrollTo({ top: 0, behavior: scrollBehavior() })
+  }, [filterKey, navType, switching])
 
   const anyFilter = KEYS.some((k) => params.has(k))
 
@@ -149,7 +181,7 @@ export default function Browse() {
         </div>
       </StickyBar>
 
-      <div className="results">
+      <div className={`results ${switching ? 'is-switching' : ''}`} ref={results} aria-busy={switching || undefined}>
         {list.error && !list.data ? (
           <ErrorState error={list.error} onRetry={() => void list.refetch()} />
         ) : !list.data ? (
@@ -178,7 +210,7 @@ export default function Browse() {
               {items.map((t) => <LiveCard key={t.id} item={t} me={me} showStudio />)}
             </div>
             <div ref={sentinel} className="sentinel">
-              {isFetchingNextPage ? <GridSkeleton cards={6} /> : hasNextPage && <button type="button" className="btn btn-ghost" onClick={() => void fetchNextPage()}>Cargar más</button>}
+              {isFetchingNextPage ? <GridSkeleton cards={6} /> : hasNextPage && !switching && <button type="button" className="btn btn-ghost" onClick={() => void fetchNextPage()}>Cargar más</button>}
             </div>
           </>
         )}
