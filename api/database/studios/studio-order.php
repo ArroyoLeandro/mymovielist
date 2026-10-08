@@ -1,8 +1,11 @@
 <?php
 
 // Display order and kind of each studio in /api/studios: slug => [sort_order, kind]. kind is 'studio' or 'category'
-// (anime/series/peliculas are catch-all categories, not production studios). Unlisted studios sort last.
+// (anime/series/peliculas are catch-all categories, not production studios). Categories come first. Unlisted studios sort last.
 return [
+    'peliculas' => [1, 'category'],
+    'series' => [2, 'category'],
+    'anime' => [3, 'category'],
     'disney' => [10, 'studio'],
     'disney-live-action' => [20, 'studio'],
     'lucasfilm' => [30, 'studio'],
@@ -14,9 +17,6 @@ return [
     'sony' => [90, 'studio'],
     'blue-sky' => [100, 'studio'],
     'ghibli' => [110, 'studio'],
-    'anime' => [120, 'category'],
     'cartoon-network' => [130, 'studio'],
     'nickelodeon' => [140, 'studio'],
-    'series' => [150, 'category'],
-    'peliculas' => [160, 'category'],
 ];
