@@ -247,6 +247,7 @@ try {
             }
             throw new HttpError(403, 'Unlock the admin page first.', 'admin_locked');
         }
+        $_SESSION['admin_until'] = time() + 1800; // sliding: a long run never locks itself out halfway
         session_write_close(); // steps take a while: never hold the session lock
         $sync = new CatalogSync($config, Db::connect($config['db']));
         if ($path === '/api/admin/status' && $method === 'GET') {

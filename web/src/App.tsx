@@ -9,6 +9,7 @@ import Browse from './pages/Browse'
 import Catalog from './pages/Catalog'
 import Ranking from './pages/Ranking'
 import Profile from './pages/Profile'
+import Admin from './pages/Admin'
 import { Toaster } from './lib/toast'
 import { AppSkeleton } from './components/Skeleton'
 import SearchBox from './components/SearchBox'
@@ -70,6 +71,7 @@ export default function App() {
           <Route path="/studios/:slug" element={<LegacyStudioRedirect />} />
           <Route path="/ranking" element={<Ranking />} />
           <Route path="/u/:tag" element={<Profile />} />
+          <Route path="/admin" element={<Admin />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
