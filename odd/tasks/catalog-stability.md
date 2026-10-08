@@ -28,6 +28,8 @@ User report (2026-10-08): the site feels full of repeated movies/series. Audit o
 - [x] S3 — Versions: card type label; "Otras versiones" in the modal (same normalized original title, computed at read time). Route: delegated writer.
 - [x] S4 — Trailers (user decision 2026-10-08: the group watches original audio): API endpoint returning up to two YouTube trailers, cached: (a) always the original-language trailer (TMDB `original_language`; fallback English when none, labeled as such), (b) plus a Latin-American Spanish trailer only when one exists (region MX/AR/419 etc.; a Spain-only Spanish trailer does not count). Modal UI (user decision 2026-10-08): one link per trailer with the YouTube logo (inline SVG), labels "Tráiler" (original language) and "Tráiler latino"; the English fallback, when the original language is not English, reads "Tráiler (inglés)". Links open YouTube in a new tab (`target="_blank" rel="noopener noreferrer"`). Route: delegated writer.
 
+- [ ] S5 — Synopsis in the title modal (user decision 2026-10-08): TMDB `overview`, on demand with the trailers details request (`language=es-MX`), fallback es-ES then English, cached like trailers, no DB/importer change; shown under the title/year, clamped to 3-4 lines with "Ver más". Trailers must stay identical. Route: delegated writer (writer trigger: API + web files).
+
 ## Acceptance criteria
 - No saga named twice for different franchises; Waverly Place is one saga.
 - #3330, #901, #649 gone locally with their user data moved to the kept rows; a re-run of the importer (dry run) does not bring them back.
@@ -73,6 +75,6 @@ User report (2026-10-08): the site feels full of repeated movies/series. Audit o
 - Follow-ups (user, 2026-10-08): (1) `api/database/studios/not-versions.php` + `StudioDefinitions::notVersions()` + filter in `Repository::versions()` unlink the 6 wrong pairs (commit f456e42, route inline: 3 small mechanical files). Check: scratch script over the local DB, all 12 directions unlinked, controls #30->#489, #31->#496, #180->#216 still linked, versions(30) ~20 ms; php -l 8.2 and php:7.4-cli OK. Deployed by uploading the 3 backend files (no SQL). (5) Server cleanup: 14 old bundles in `assets/` and Hostinger's `default.php` deleted (both now fall back to the SPA); current bundle index-woMh7Oej.js / index-DIANoeaT.css serves 200; stray local `api;A/` removed. Phone-width check of S2 waits for user feedback; S4 review and untranslated anime titles: not needed (user).
 
 ## Next step
-Feature complete; waiting for the group's feedback on phones.
+S5 (delegated writer); then deploy (upload api/ + web build, no SQL). Phone feedback still pending.
 <!-- previous: Feature complete; optional follow-ups: exclusion list for the 6 wrong version pairs, phone-width check of S2, review of the S4 slice. -->
 <!-- superseded: then the user decides delivery (push / merge / prod deploy with the runbook: backup, 010, upload api/ + web build, 009). -->
