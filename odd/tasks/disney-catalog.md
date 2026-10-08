@@ -88,6 +88,7 @@ User decisions (2026-10-07): studio page = 3 tabs (Sagas as rows with progress, 
 
 - T18/T19 verification (local MariaDB 11.8 prod copy, backup backups/local-before-T18.sql): php 7.4 lint OK (Repository.php, index.php); `npm run build` passes; migration 005 applied twice (re-runnable); curl through :5173 as Kanji1: /api/home (6 rows, 20 items each), /api/search?q=harry (8) and ?q=senor finds "El señor de los anillos" (accent-insensitive), /api/titles?type=series&sort=popular (1052 total, 60 per page, hasMore), watchlist PUT/DELETE 204, marking watched removes the title from the watchlist, recommendation POST (note trimmed, 281 chars -> 422, self-only -> 422, other profile hides recommendation tabs), DELETE 204 then 404. Test rows removed: watch_entries per user identical (total 325), watchlist and recommendations empty. No browser E2E run (layout, mobile search and scroll behavior unverified visually).
 - Prod runbook addition: apply migration 005 (see README), then deploy api + web build.
+- T20 — Card/modal/score UX: compact card (poster + icon cluster, title, year, one group summary line), title detail modal with group stats and viewers (b14c054), segmented score meter. Route: delegated. `tsc -b` + `npm run build` pass; no browser E2E.
 
 ## Next step
 T15–T16 (writer A), then T17 (writer B), then T18–T19 (writer C); local test on a prod copy; user confirms before deploy.
