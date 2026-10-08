@@ -1,4 +1,11 @@
 export interface User { id: number; tag: string }
+/** Where to watch (Argentina): one entry per provider and offer type, sorted by type then TMDB priority. */
+export type ProviderType = 'flatrate' | 'free' | 'ads' | 'rent' | 'buy'
+export interface ProviderRef { id: number; type: ProviderType }
+export interface ProviderInfo { name: string; logoUrl: string | null }
+export interface ProviderStat extends ProviderInfo { id: number; titleCount: number; flatrateCount: number }
+/** Where-to-watch fields carried by every title payload. */
+export interface Availability { providers: ProviderRef[]; providersLink: string | null }
 export interface Rating { tag: string; score: number | null }
 /** Static title data (cacheable). */
 export interface Movie {
@@ -10,6 +17,8 @@ export interface Movie {
   mediaType: 'movie' | 'series'
   tmdbId: number | null
   collection: { slug: string; name: string } | null
+  providers: ProviderRef[]
+  providersLink: string | null
 }
 /** Dynamic per-title data; only titles with at least one entry have a row. */
 export interface RatingRow {
@@ -24,7 +33,13 @@ export interface RatingRow {
 export interface Section { slug: string; name: string; period: string; movies: Movie[] }
 /** Collection with 2+ titles in the studio; titleIds are in release order. */
 export interface Saga { slug: string; name: string; posterUrl: string | null; titleIds: number[] }
-export interface Catalog { studio: { slug: string; name: string; logoUrl: string | null }; sections: Section[]; sagas: Saga[] }
+export interface Catalog {
+  studio: { slug: string; name: string; logoUrl: string | null }
+  sections: Section[]
+  sagas: Saga[]
+  /** Providers used by this studio's titles, keyed by id. */
+  providers: Record<string, ProviderInfo>
+}
 export interface Studio { slug: string; name: string; logoUrl: string | null; kind?: 'studio' | 'category'; movieCount: number }
 export interface Progress { slug: string; watchedCount: number }
 export interface Entry { movieId: number; watched: boolean; score: number | null; watchedAt: string | null }
@@ -59,6 +74,8 @@ export interface TitleSummary {
   tmdbId: number | null
   studio: { slug: string; name: string; kind: 'studio' | 'category' }
   section: { slug: string; name: string }
+  providers: ProviderRef[]
+  providersLink: string | null
 }
 /** Title plus the viewer's dynamic state (watched, score, pending, group ratings). */
 export interface StateTitle extends TitleSummary { state: RatingRow }
@@ -67,7 +84,13 @@ export type HomeRow =
   | { key: string; title: string; link: string | null; kind: 'titles'; items: StateTitle[] }
   | { key: string; title: string; link: string | null; kind: 'sagas'; items: HomeSaga[] }
 export interface TitlesPage { items: StateTitle[]; total: number; page: number; hasMore: boolean }
-export interface TitleFilters { type?: string; studio?: string; decade?: string; status?: string; sort?: string; q?: string }
+export interface TitleFilters {
+  type?: string; studio?: string; decade?: string; status?: string; sort?: string; q?: string
+  /** Comma-separated provider ids. */
+  provider?: string
+  /** flatrate (also free/ads) | rent | buy | any */
+  ptype?: string
+}
 
 export interface ListEntry {
   movie: TitleSummary
@@ -143,6 +166,7 @@ export const api = {
     p.set('page', String(page))
     return request<TitlesPage>('GET', `/titles?${p}`)
   },
+  providers: () => request<ProviderStat[]>('GET', '/providers?used=1'),
   search: (q: string) => request<StateTitle[]>('GET', `/search?q=${encodeURIComponent(q)}`),
   setPending: (id: number, pending: boolean) => request<void>(pending ? 'PUT' : 'DELETE', `/movies/${id}/watchlist`),
   recommend: (id: number, toTags: string[], note: string) =>

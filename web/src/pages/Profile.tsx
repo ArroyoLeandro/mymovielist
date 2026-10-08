@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { api, type ListEntry, type Profile as ProfileData, type TitleSummary } from '../api'
 import { useAuth } from '../auth'
+import { ProviderStrip } from '../components/Providers'
 import Poster from '../components/Poster'
 import StudioLogo from '../components/StudioLogo'
 import { Bookmark, Eye, Inbox, Send } from 'lucide-react'
@@ -37,6 +38,7 @@ function TitleRow({ m, aside, children }: { m: TitleSummary; aside?: ReactNode; 
           <span className="tag">{m.section.name}</span>
           {m.mediaType === 'series' && <span className="tag series">Serie</span>}
         </span>
+        {m.providers?.length > 0 && <ProviderStrip refs={m.providers} />}
         {children}
       </div>
       {aside}

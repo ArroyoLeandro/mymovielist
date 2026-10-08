@@ -1,8 +1,9 @@
 import { memo, useState } from 'react'
 import { Plus, Check, Bookmark, BookmarkCheck, Send, ChevronRight } from 'lucide-react'
-import type { RatingRow, TitleSummary } from '../api'
+import type { Availability, RatingRow, TitleSummary } from '../api'
 import { useTitleActions } from '../lib/useTitleActions'
 import Poster from './Poster'
+import { ProviderStrip } from './Providers'
 import RecommendModal from './RecommendModal'
 import TitleModal from './TitleModal'
 
@@ -10,10 +11,11 @@ export type SaveFn = (movieId: number, watched: boolean, score: number | null) =
 export type PendingFn = (movieId: number, pending: boolean) => Promise<boolean>
 export type CardMovie = Pick<TitleSummary, 'id' | 'title' | 'originalTitle' | 'year' | 'posterUrl' | 'mediaType'> & {
   collection?: { slug: string; name: string } | null
-}
+} & Partial<Availability>
 
 /**
- * Compact title card: poster with icon actions (watched, wishlist, recommend), title/year and a one-line group summary.
+ * Compact title card: poster with icon actions (watched, wishlist, recommend), title/year, where to watch (logo row)
+ * and a one-line group summary.
  * Scoring and the per-friend ratings live in the detail modal (TitleModal).
  */
 const TitleCard = memo(function TitleCard({ movie: m, r, me, onSave, onPending, label, studioName, sectionName }: {
@@ -70,6 +72,7 @@ const TitleCard = memo(function TitleCard({ movie: m, r, me, onSave, onPending, 
       </div>
       <h3><button type="button" className="title-open" aria-haspopup="dialog" onClick={() => setDetail(true)}>{m.title}</button></h3>
       <p className="year">{m.year}{label ? ` · ${label}` : ''}</p>
+      <ProviderStrip refs={m.providers} />
       <button type="button" className="summary" aria-haspopup="dialog" onClick={() => setDetail(true)}>
         <span className="sum-stats">
           {watchersCount === 0 ? 'Nadie la vio todavía' : (

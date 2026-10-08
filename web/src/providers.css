@@ -1,0 +1,141 @@
+/* =============================================================================
+   Where to watch (Argentina): card logo row, title modal section, platform filter.
+   Tokens, buttons, .seg and .chip-q live in index.css; the modal shell in title-modal.css.
+   ============================================================================= */
+
+/* ---------- logos ---------- */
+/* Provider logos are square app icons; a hairline ring keeps dark ones from melting into the panel. */
+.prov-logo {
+  flex: none; display: block; width: 18px; height: 18px; border-radius: 5px; object-fit: cover;
+  background: var(--panel-2); box-shadow: 0 0 0 1px #ffffff1f;
+}
+.prov-logo-empty {
+  display: grid; place-items: center; color: var(--muted);
+  font-size: 0.62rem; font-weight: 700; line-height: 1; text-transform: uppercase;
+}
+
+/* ---------- card row ----------
+   Always rendered (also empty) with a fixed height, so every card in a grid row keeps the same height. */
+.prov-strip { display: flex; align-items: center; gap: 4px; height: 20px; overflow: hidden; }
+.prov-more { flex: none; padding-left: 1px; color: var(--muted); font-size: 0.7rem; font-weight: 700; line-height: 1; }
+/* Free / with ads: logo plus a mint word in one capsule. */
+.prov-free {
+  flex: none; display: inline-flex; align-items: center; gap: 4px; height: 18px; padding-right: 6px;
+  border-radius: 5px; background: #6ee7a01a; box-shadow: inset 0 0 0 1px #6ee7a066;
+  color: var(--mint); font-size: 0.64rem; font-weight: 700; line-height: 1;
+}
+.prov-free .prov-logo { box-shadow: none; }
+/* Rent or buy only: the pill names the deal, the logos stay grey so they never read as "included". */
+.prov-paid {
+  flex: none; display: inline-flex; align-items: center; height: 18px; padding: 0 7px;
+  border: 1px dashed var(--line-strong); border-radius: var(--r-pill);
+  color: var(--muted); font-size: 0.66rem; font-weight: 600; line-height: 1; white-space: nowrap;
+}
+.prov-strip.paid .prov-logo { filter: grayscale(1); opacity: 0.55; }
+@media (min-width: 1024px) {
+  .prov-strip { gap: 5px; height: 22px; }
+  .prov-strip .prov-logo { width: 20px; height: 20px; }
+  .prov-free, .prov-paid { height: 20px; }
+}
+
+/* ---------- title modal: "Dónde verla" ---------- */
+.td-where { min-width: 0; padding: var(--s4) var(--td-pr) var(--s5) var(--td-pl); border-top: 1px solid var(--line); }
+.td-where h3 { margin-bottom: var(--s3); font-size: 1rem; }
+.where-empty { margin: 0; }
+.where-groups { display: grid; gap: var(--s3); margin: 0; }
+.where-group { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; min-width: 0; }
+.where-group dt { color: var(--muted); font-size: var(--fs-meta); font-weight: 600; }
+.where-group dd { min-width: 0; margin: 0; }
+.where-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.where-chip {
+  display: inline-flex; align-items: center; gap: var(--s2); max-width: 100%; min-width: 0;
+  padding: 4px 12px 4px 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2);
+  font-size: 0.85rem; font-weight: 600; line-height: 1.2;
+}
+.where-chip .prov-logo { width: 28px; height: 28px; border-radius: 7px; }
+.where-chip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.where-foot {
+  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--s1) var(--s4);
+  margin: var(--s4) 0 0; color: var(--muted); font-size: var(--fs-xs);
+}
+.where-foot a {
+  display: inline-flex; align-items: center; gap: 4px; border-radius: 4px;
+  color: var(--gold); font-size: var(--fs-meta); font-weight: 600; text-decoration: none;
+}
+.where-foot a:hover { text-decoration: underline; }
+/* Wider screens: the offer type sits in a label column beside its chips. */
+@media (min-width: 600px) {
+  .where-group { grid-template-columns: 9.5rem minmax(0, 1fr); align-items: start; gap: var(--s3); }
+  .where-group dt { padding-top: 9px; }
+}
+
+/* ---------- platform filter: trigger ---------- */
+.prov-trigger {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; max-width: 260px; min-height: 36px; padding: 0 12px;
+  border: 1px solid var(--line-strong); border-radius: var(--r-pill); background: var(--panel);
+  color: var(--text); font-size: 0.85rem; white-space: nowrap;
+  transition: border-color var(--fast), background-color var(--fast);
+}
+.prov-trigger:hover:not(:disabled) { border-color: var(--muted); }
+.prov-trigger:disabled { opacity: 0.5; }
+.prov-trigger > svg { flex: none; color: var(--muted); }
+.prov-trigger.on { border-color: var(--gold); background: var(--panel-2); }
+.prov-trigger[aria-expanded='true'] > svg:last-child { transform: rotate(180deg); }
+.prov-trigger-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.prov-trigger small { color: var(--gold); font-size: 0.75rem; font-weight: 600; }
+.prov-stack { display: flex; flex: none; }
+.prov-stack .prov-logo { box-shadow: 0 0 0 2px var(--panel-2); }
+.prov-stack .prov-logo + .prov-logo { margin-left: -6px; }
+/* Inside the studio toolbar it matches the segmented control next to it. */
+.bar-line .prov-trigger { min-height: 34px; font-size: 0.82rem; }
+@media (max-width: 899.98px) { .bar-line .prov-trigger { min-height: 30px; } }
+
+/* Browse: selected platforms as removable chips (.chip-q) with their logo. */
+.prov-chip .prov-logo { width: 18px; height: 18px; }
+
+/* ---------- platform filter: popover / sheet ---------- */
+.prov-pop {
+  position: fixed; z-index: 36; display: flex; flex-direction: column; gap: var(--s3); min-height: 0;
+  padding: var(--s3); overflow: hidden;
+  background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: var(--shadow-pop);
+  outline: none; animation: pop 0.14s var(--ease);
+}
+.prov-pop-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); min-height: 30px; padding-left: 4px; }
+.prov-pop-head strong { font-family: var(--display); font-size: 0.98rem; }
+.prov-types { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; padding: 0 0 var(--s3) 4px; border-bottom: 1px solid var(--line); }
+.prov-types > span { flex: none; margin-right: 2px; color: var(--muted); font-size: var(--fs-meta); }
+.prov-types .chip { min-height: 30px; padding: 0 11px; font-size: 0.82rem; }
+.prov-search { width: 100%; min-height: 36px; border-radius: var(--r-pill); background: var(--night); font-size: 0.88rem; }
+/* Head, type and search stay put; only the list scrolls. */
+.prov-list { display: grid; align-content: start; gap: 2px; flex: 0 1 auto; min-height: 0; margin: 0; padding: 0; list-style: none; overflow-y: auto; overscroll-behavior: contain; }
+.prov-pop > :not(.prov-list) { flex: none; }
+.prov-opt {
+  position: relative; display: grid; grid-template-columns: 18px 24px minmax(0, 1fr) auto; align-items: center; gap: 10px;
+  min-height: 40px; padding: 4px 8px; border-radius: 10px;
+  color: var(--text); font-size: 0.88rem; font-weight: 500; cursor: pointer;
+}
+.prov-opt:hover { background: var(--panel-2); }
+.prov-opt.on { background: #d4f5260d; }
+.prov-opt input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.prov-check {
+  display: grid; place-items: center; width: 18px; height: 18px; border-radius: 5px;
+  border: 1.5px solid var(--line-strong); color: transparent; transition: background-color var(--fast), border-color var(--fast);
+}
+.prov-opt.on .prov-check { background: var(--gold); border-color: var(--gold); color: var(--gold-ink); }
+.prov-opt input:focus-visible ~ .prov-check { outline: 2px solid var(--gold); outline-offset: 2px; }
+.prov-opt .prov-logo { width: 24px; height: 24px; border-radius: 6px; }
+.prov-opt-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prov-opt small { color: var(--muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.prov-none { margin: 0; padding: 0 4px var(--s2); }
+
+/* Phones: a bottom sheet over a scrim, like the title modal. */
+.prov-back {
+  position: fixed; inset: 0; z-index: 36; display: grid; place-items: end stretch;
+  background: var(--scrim); animation: fade var(--fast) ease-out;
+}
+.prov-pop.sheet {
+  position: relative; max-width: 100vw; max-height: 80dvh;
+  padding: var(--s4) var(--gutter) calc(var(--s4) + env(safe-area-inset-bottom, 0px));
+  border-width: 1px 0 0; border-radius: var(--r-lg) var(--r-lg) 0 0; animation: sheet 0.22s var(--ease);
+}
+.prov-done { margin-top: 2px; }

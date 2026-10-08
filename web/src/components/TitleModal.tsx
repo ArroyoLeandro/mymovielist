@@ -7,10 +7,11 @@ import { useDialog } from '../lib/useDialog'
 import { useTitleActions } from '../lib/useTitleActions'
 import { scoreTier as tier } from '../lib/scores'
 import Poster from './Poster'
+import { WhereToWatch } from './Providers'
 import ScoreMeter from './ScoreMeter'
 import type { CardMovie, PendingFn, SaveFn } from './TitleCard'
 
-/** Title detail: the user's own controls first, then every viewer's score, then quiet group stats. */
+/** Title detail: the user's own controls first, then where to watch, every viewer's score and quiet group stats. */
 export default function TitleModal({ movie: m, r, me, onSave, onPending, studioName, sectionName, paused, onRecommend, onClose }: {
   movie: CardMovie; r: RatingRow | undefined; me: string; onSave: SaveFn; onPending: PendingFn
   studioName?: string; sectionName?: string; paused: boolean; onRecommend: () => void; onClose: () => void
@@ -82,6 +83,8 @@ export default function TitleModal({ movie: m, r, me, onSave, onPending, studioN
               hint={watched ? undefined : 'Al puntuarla queda marcada como vista'}
             />
           </section>
+
+          <WhereToWatch id={m.id} refs={m.providers} link={m.providersLink} />
 
           <section className="td-people" aria-labelledby={`td-people-${m.id}`}>
             <h3 id={`td-people-${m.id}`}>Quién la vio</h3>

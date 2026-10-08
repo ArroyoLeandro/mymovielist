@@ -6,12 +6,14 @@ import { api, type Movie, type RatingRow } from '../api'
 import { useAuth } from '../auth'
 import { Clapperboard, SearchX } from 'lucide-react'
 import GridSection from '../components/GridSection'
+import ProviderPicker, { type PickerOption } from '../components/ProviderPicker'
 import SectionNav from '../components/SectionNav'
 import { CatalogSkeleton } from '../components/Skeleton'
 import { EmptyState, ErrorState } from '../components/States'
 import StickyBar from '../components/StickyBar'
 import Tabs, { type TabItem } from '../components/Tabs'
 import TitleCard, { type PendingFn, type SaveFn } from '../components/TitleCard'
+import { matchesProviders, ProviderDictContext, type PType } from '../lib/providers'
 import { blankRow, isEmptyRow, patchEntry, upsertRow } from '../lib/ratings'
 import { useCatalog } from '../queries'
 
@@ -113,6 +115,14 @@ function CatalogView({ slug }: { slug: string }) {
 
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
+  // Where to watch (client-side over the catalog payload): picked platforms and offer type.
+  const [provSel, setProvSel] = useState<number[]>([])
+  const [ptype, setPtype] = useState<PType>('')
+  const provSet = useMemo(() => new Set(provSel), [provSel])
+  const pickProviders = useCallback((ids: number[]) => {
+    setProvSel(ids)
+    if (ids.length === 0) setPtype('')
+  }, [])
   // Sections always start expanded; collapsing is per visit and resets when the studio changes.
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
@@ -123,6 +133,26 @@ function CatalogView({ slug }: { slug: string }) {
   const haystack = useMemo(() => new Map(all.map((m) => [m.id, norm(`${m.title} ${m.originalTitle ?? ''}`)])), [all])
   const titleById = useMemo(() => new Map(all.map((m) => [m.id, m])), [all])
   const sectionOf = useMemo(() => new Map((sections ?? []).flatMap((s) => s.movies.map((m) => [m.id, s] as const))), [sections])
+  const dictMap = useMemo(
+    () => new Map(Object.entries(catalog.data?.providers ?? {}).map(([id, p]) => [Number(id), p])),
+    [catalog.data?.providers],
+  )
+  // Platforms used by this studio, most titles on subscription first; the count is titles on that platform.
+  const providerOptions = useMemo<PickerOption[]>(() => {
+    const n = new Map<number, { all: Set<number>; sub: Set<number> }>()
+    for (const m of all) {
+      for (const p of m.providers ?? []) {
+        const c = n.get(p.id) ?? { all: new Set<number>(), sub: new Set<number>() }
+        c.all.add(m.id)
+        if (p.type === 'flatrate' || p.type === 'free' || p.type === 'ads') c.sub.add(m.id)
+        n.set(p.id, c)
+      }
+    }
+    return [...n.entries()]
+      .map(([id, c]) => ({ id, name: dictMap.get(id)?.name ?? `Plataforma ${id}`, logoUrl: dictMap.get(id)?.logoUrl ?? null, count: c.all.size, sub: c.sub.size }))
+      .sort((a, b) => b.sub - a.sub || b.count - a.count || a.name.localeCompare(b.name))
+      .map(({ sub: _sub, ...o }) => o)
+  }, [all, dictMap])
   const moviesCount = useMemo(() => all.filter((m) => m.mediaType === 'movie').length, [all])
   const seriesCount = all.length - moviesCount
 
@@ -157,10 +187,11 @@ function CatalogView({ slug }: { slug: string }) {
   const needTab: Tab | null = jumpT ? (titleById.has(Number(jumpT)) ? 'todas' : null) : jumpSaga ? 'sagas' : null
   useEffect(() => {
     if (!ready || !jumpKey || handled.current === jumpKey || !needTab) return
-    if (tab !== needTab || query || filter !== 'all') {
+    if (tab !== needTab || query || filter !== 'all' || provSel.length > 0) {
       setTab(needTab)
       setQuery('')
       setFilter('all')
+      pickProviders([])
       return
     }
     const sec = jumpT ? sectionOf.get(Number(jumpT))?.slug : undefined
@@ -180,7 +211,7 @@ function CatalogView({ slug }: { slug: string }) {
       el.classList.add('flash')
       setTimeout(() => el.classList.remove('flash'), 2400)
     }, 80)
-  }, [ready, jumpKey, jumpT, jumpSaga, needTab, tab, query, filter, collapsed, sectionOf, setTab])
+  }, [ready, jumpKey, jumpT, jumpSaga, needTab, tab, query, filter, provSel, collapsed, sectionOf, setTab, pickProviders])
 
   if ((catalog.error && !catalog.data) || (ratings.error && !ratings.data)) {
     return <ErrorState error={catalog.error ?? ratings.error} onRetry={() => { void catalog.refetch(); void ratings.refetch() }} />
@@ -192,10 +223,11 @@ function CatalogView({ slug }: { slug: string }) {
   const pct = all.length ? Math.round((watchedCount / all.length) * 100) : 0
 
   const q = norm(query.trim())
-  const searching = q !== '' || filter !== 'all'
+  const searching = q !== '' || filter !== 'all' || provSet.size > 0
   const visible = (m: Movie) => {
     const watched = byId.get(m.id)?.watched ?? false
     return (filter === 'all' || (filter === 'watched') === watched) && (!q || haystack.get(m.id)!.includes(q))
+      && matchesProviders(m.providers, provSet, ptype)
   }
 
   // Todas / Películas / Series keep the studio's sections (eras, decades, genres) as headers.
@@ -229,7 +261,7 @@ function CatalogView({ slug }: { slug: string }) {
   )
 
   return (
-    <>
+    <ProviderDictContext.Provider value={dictMap}>
       <header className="studio-head">
         <div className="progress-text"><h1 className="title">{studioName}</h1><span>{watchedCount}/{all.length} vistas &middot; {pct}%</span></div>
         <div className="meter" aria-hidden="true"><i style={{ width: `${pct}%` }} /></div>
@@ -247,6 +279,9 @@ function CatalogView({ slug }: { slug: string }) {
                 </button>
               ))}
             </div>
+            {providerOptions.length > 0 && (
+              <ProviderPicker options={providerOptions} selected={provSel} onChange={pickProviders} ptype={ptype} onPType={setPtype} />
+            )}
           </div>
           <div className="bar-search">
             <input type="search" placeholder={`Buscar en ${studioName}`} value={query} onChange={(e) => setQuery(e.target.value)} aria-label={`Buscar por título en ${studioName}`} enterKeyHint="search" />
@@ -297,11 +332,11 @@ function CatalogView({ slug }: { slug: string }) {
         <EmptyState
           icon={SearchX}
           title="Nada coincide con tu búsqueda"
-          action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => { setQuery(''); setFilter('all') }}>Mostrar todo</button>}
+          action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => { setQuery(''); setFilter('all'); pickProviders([]) }}>Mostrar todo</button>}
         >
-          Prueba con otra palabra o cambia el filtro de vistas.
+          Prueba con otra palabra o cambia los filtros de vistas y plataforma.
         </EmptyState>
       ))}
-    </>
+    </ProviderDictContext.Provider>
   )
 }

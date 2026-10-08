@@ -7,8 +7,11 @@ import LiveCard from '../components/LiveCard'
 import { SearchX, X } from 'lucide-react'
 import { GridSkeleton } from '../components/Skeleton'
 import { EmptyState, ErrorState } from '../components/States'
+import ProviderPicker, { type PickerOption } from '../components/ProviderPicker'
+import { ProviderLogo } from '../components/Providers'
 import StickyBar from '../components/StickyBar'
-import { useStudios } from '../queries'
+import { parseIds, parsePType, PTYPES, type PType } from '../lib/providers'
+import { useProviders, useStudios } from '../queries'
 
 const DECADES = [2020, 2010, 2000, 1990, 1980, 1970, 1960, 1950, 1940, 1930]
 const SORTS: [string, string][] = [
@@ -18,7 +21,7 @@ const SORTS: [string, string][] = [
   ['score', 'Puntaje del grupo'],
   ['title', 'Título A-Z'],
 ]
-const KEYS = ['type', 'studio', 'decade', 'status', 'sort', 'q'] as const
+const KEYS = ['type', 'studio', 'decade', 'status', 'sort', 'q', 'provider', 'ptype'] as const
 
 /** "Ver todo": every title across all catalogs, filterable, loaded 60 at a time. */
 export default function Browse() {
@@ -26,6 +29,7 @@ export default function Browse() {
   const me = user?.tag ?? ''
   const [params, setParams] = useSearchParams()
   const studios = useStudios()
+  const providers = useProviders()
 
   const filters = useMemo<TitleFilters>(() => {
     const f: TitleFilters = {}
@@ -33,6 +37,10 @@ export default function Browse() {
       const v = params.get(k)
       if (v) f[k] = v
     })
+    const ids = parseIds(f.provider ?? null)
+    if (ids.length) f.provider = ids.join(',')
+    else delete f.provider
+    if (!f.provider || !parsePType(f.ptype ?? null)) delete f.ptype // the type only narrows a platform pick
     return f
   }, [params])
   const set = (k: (typeof KEYS)[number], v: string) => {
@@ -41,6 +49,26 @@ export default function Browse() {
     else next.delete(k)
     setParams(next, { replace: true })
   }
+
+  // Where to watch: provider=8,337 (multi-select) and ptype (only meaningful with a platform picked).
+  const providerIds = useMemo(() => parseIds(params.get('provider')), [params])
+  const ptype = providerIds.length ? parsePType(params.get('ptype')) : ''
+  const setProviders = (ids: number[]) => {
+    const next = new URLSearchParams(params)
+    if (ids.length) next.set('provider', ids.join(','))
+    else {
+      next.delete('provider')
+      next.delete('ptype')
+    }
+    setParams(next, { replace: true })
+  }
+  const options = useMemo<PickerOption[]>(
+    () => [...(providers.data ?? [])]
+      .sort((a, b) => b.flatrateCount - a.flatrateCount || b.titleCount - a.titleCount || a.name.localeCompare(b.name))
+      .map((p) => ({ id: p.id, name: p.name, logoUrl: p.logoUrl, count: p.titleCount })),
+    [providers.data],
+  )
+  const optionById = useMemo(() => new Map(options.map((o) => [o.id, o])), [options])
 
   const list = useInfiniteQuery({
     queryKey: ['titles', filters],
@@ -98,6 +126,21 @@ export default function Browse() {
             <option value="unwatched">Sin ver</option>
             <option value="pending">Pendientes</option>
           </select>
+          <ProviderPicker options={options} selected={providerIds} onChange={setProviders} ptype={ptype} onPType={(t: PType) => set('ptype', t)} summary={false} />
+          {providerIds.map((id) => {
+            const o = optionById.get(id)
+            const name = o?.name ?? `Plataforma ${id}`
+            return (
+              <button key={id} type="button" className="chip-q prov-chip" onClick={() => setProviders(providerIds.filter((x) => x !== id))} aria-label={`Quitar el filtro ${name}`}>
+                <ProviderLogo info={o} />{name} <X size={14} aria-hidden="true" />
+              </button>
+            )
+          })}
+          {ptype && (
+            <button type="button" className="chip-q" onClick={() => set('ptype', '')} aria-label={`Quitar el filtro de tipo ${PTYPES.find(([v]) => v === ptype)?.[1]}`}>
+              Solo {PTYPES.find(([v]) => v === ptype)?.[1].toLowerCase()} <X size={14} aria-hidden="true" />
+            </button>
+          )}
           <select value={filters.sort ?? 'popular'} onChange={(e) => set('sort', e.target.value === 'popular' ? '' : e.target.value)} aria-label="Ordenar por">
             {SORTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
@@ -115,7 +158,7 @@ export default function Browse() {
             title="No hay títulos con estos filtros"
             action={anyFilter && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setParams(new URLSearchParams(), { replace: true })}>Quitar los filtros</button>}
           >
-            Prueba con otra década, otro estudio o una búsqueda más corta.
+            Prueba con otra década, otro estudio, otra plataforma o una búsqueda más corta.
           </EmptyState>
         ) : (
           <>

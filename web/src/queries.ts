@@ -10,6 +10,10 @@ export const useStudios = () =>
 export const useCatalog = (slug: string) =>
   useQuery({ queryKey: ['catalog', slug], queryFn: () => api.catalog(slug), staleTime: HOUR, gcTime: 24 * HOUR })
 
+// Where-to-watch providers (static until the weekly refresh): the global logo/name dictionary.
+export const useProviders = () =>
+  useQuery({ queryKey: ['providers'], queryFn: api.providers, staleTime: 6 * HOUR, gcTime: 24 * HOUR })
+
 // Dynamic data.
 export const useProgress = () => useQuery({ queryKey: ['progress'], queryFn: api.progress })
 
