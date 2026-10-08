@@ -70,6 +70,9 @@ User report (2026-10-08): the site feels full of repeated movies/series. Audit o
 
 - Prod "Sincronizar todo" (user, after 009): all 18 steps ran; +3 titles (anime 1, series 2), providers 3/3; Warner animation "1 excluded" (Batman Beyond pilot stays out); prune kept every below-threshold title as referenced/always-keep/canon (nothing deleted).
 
+- Follow-ups (user, 2026-10-08): (1) `api/database/studios/not-versions.php` + `StudioDefinitions::notVersions()` + filter in `Repository::versions()` unlink the 6 wrong pairs (commit f456e42, route inline: 3 small mechanical files). Check: scratch script over the local DB, all 12 directions unlinked, controls #30->#489, #31->#496, #180->#216 still linked, versions(30) ~20 ms; php -l 8.2 and php:7.4-cli OK. Deployed by uploading the 3 backend files (no SQL). (5) Server cleanup: 14 old bundles in `assets/` and Hostinger's `default.php` deleted (both now fall back to the SPA); current bundle index-woMh7Oej.js / index-DIANoeaT.css serves 200; stray local `api;A/` removed. Phone-width check of S2 waits for user feedback; S4 review and untranslated anime titles: not needed (user).
+
 ## Next step
-Feature complete; optional follow-ups: exclusion list for the 6 wrong version pairs, phone-width check of S2, review of the S4 slice.
+Feature complete; waiting for the group's feedback on phones.
+<!-- previous: Feature complete; optional follow-ups: exclusion list for the 6 wrong version pairs, phone-width check of S2, review of the S4 slice. -->
 <!-- superseded: then the user decides delivery (push / merge / prod deploy with the runbook: backup, 010, upload api/ + web build, 009). -->
