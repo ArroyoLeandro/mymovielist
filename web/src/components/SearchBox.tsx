@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Search } from 'lucide-react'
+import { Search, X } from 'lucide-react'
 import Poster from './Poster'
 import { useSearch } from '../queries'
 
@@ -54,7 +54,7 @@ export default function SearchBox() {
     <form className={`search ${expanded ? 'expanded' : ''}`} ref={box} role="search" onSubmit={submit} onKeyDown={(e) => e.key === 'Escape' && (setOpen(false), setExpanded(false))}>
       <button
         type="button"
-        className="search-toggle ghost"
+        className="btn btn-ghost btn-icon search-toggle"
         aria-label="Buscar"
         aria-expanded={expanded}
         onClick={() => {
@@ -65,22 +65,29 @@ export default function SearchBox() {
       >
         <Search size={18} aria-hidden="true" />
       </button>
-      <input
-        ref={input}
-        type="search"
-        value={value}
-        placeholder="Buscar en todo el catálogo"
-        aria-label="Buscar en todo el catálogo"
-        autoComplete="off"
-        onChange={(e) => { setValue(e.target.value); setOpen(true) }}
-        onFocus={() => setOpen(true)}
-      />
+      <div className="search-field">
+        <Search className="search-icon" size={16} aria-hidden="true" />
+        <input
+          ref={input}
+          type="search"
+          value={value}
+          placeholder="Buscar en todo el catálogo"
+          aria-label="Buscar en todo el catálogo"
+          autoComplete="off"
+          enterKeyHint="search"
+          onChange={(e) => { setValue(e.target.value); setOpen(true) }}
+          onFocus={() => setOpen(true)}
+        />
+      </div>
+      <button type="button" className="btn btn-quiet btn-icon search-close" aria-label="Cerrar la búsqueda" onClick={() => { setOpen(false); setExpanded(false) }}>
+        <X size={18} aria-hidden="true" />
+      </button>
       {show && (
-        <div className="search-drop" role="listbox" aria-label="Resultados">
+        <div className="search-drop" role="region" aria-label="Resultados de la búsqueda" aria-live="polite">
           {results.isFetching && list.length === 0 && <p className="muted search-note">Buscando…</p>}
           {!results.isFetching && list.length === 0 && <p className="muted search-note">Sin resultados para “{q}”.</p>}
           {list.map((t) => (
-            <Link key={t.id} to={`/studio/${t.studio.slug}?t=${t.id}`} className="search-item" role="option">
+            <Link key={t.id} to={`/studio/${t.studio.slug}?t=${t.id}`} className="search-item">
               <Poster url={t.posterUrl} title={t.title} className="thumb" />
               <span className="info">
                 <strong>{t.title}</strong>

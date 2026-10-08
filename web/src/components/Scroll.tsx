@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowUp } from 'lucide-react'
 import { useLocation, useNavigate, useNavigationType } from 'react-router-dom'
+import { scrollBehavior } from '../lib/motion'
 
 /**
  * Scroll handling for a router without a data layer: new pages (PUSH/REPLACE to another path) start at the top,
@@ -56,10 +57,11 @@ export function ToTopButton() {
   return (
     <button
       type="button"
-      className={`to-top ${visible ? 'show' : ''}`}
+      className={`btn btn-icon to-top ${visible ? 'show' : ''}`}
       aria-label="Ir arriba"
+      aria-hidden={!visible}
       tabIndex={visible ? 0 : -1}
-      onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+      onClick={() => window.scrollTo({ top: 0, behavior: scrollBehavior() })}
     >
       <ArrowUp size={18} aria-hidden="true" />
     </button>
@@ -74,7 +76,7 @@ export function BackButton() {
   const inApp = ((window.history.state as { idx?: number } | null)?.idx ?? 0) > 0
   const parent = pathname.startsWith('/studio/') ? '/estudios' : '/'
   return (
-    <button type="button" className="back" onClick={() => (inApp ? nav(-1) : nav(parent, { replace: true }))}>
+    <button type="button" className="btn btn-quiet btn-sm back" onClick={() => (inApp ? nav(-1) : nav(parent, { replace: true }))}>
       <ArrowLeft size={16} aria-hidden="true" /> Volver
     </button>
   )

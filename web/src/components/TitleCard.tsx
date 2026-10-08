@@ -35,7 +35,8 @@ const TitleCard = memo(function TitleCard({ movie: m, r, me, onSave, onPending, 
         {score !== null && <span className="my-score" title="Tu puntaje">★ {score}</span>}
         <div className="art-actions">
           <button
-            className={`check ${watched ? 'on' : ''}`}
+            type="button"
+            className={`act ${watched ? 'on' : ''}`}
             aria-pressed={watched}
             aria-label={watched ? `Quitar ${m.title} de las vistas` : `Marcar ${m.title} como vista`}
             data-tip={watched ? 'Quitar de vistas' : 'Marcar como vista'}
@@ -45,7 +46,8 @@ const TitleCard = memo(function TitleCard({ movie: m, r, me, onSave, onPending, 
           </button>
           {!watched && (
             <button
-              className={`check ${pending ? 'on' : ''}`}
+              type="button"
+              className={`act ${pending ? 'on' : ''}`}
               aria-pressed={pending}
               aria-label={pending ? `Quitar ${m.title} de pendientes` : `Quiero ver ${m.title}`}
               data-tip={pending ? 'Quitar de pendientes' : 'Quiero verla'}
@@ -55,7 +57,8 @@ const TitleCard = memo(function TitleCard({ movie: m, r, me, onSave, onPending, 
             </button>
           )}
           <button
-            className="check"
+            type="button"
+            className="act"
             aria-label={`Recomendar ${m.title} a un amigo`}
             aria-haspopup="dialog"
             data-tip="Recomendar a un amigo"
@@ -75,7 +78,7 @@ const TitleCard = memo(function TitleCard({ movie: m, r, me, onSave, onPending, 
         </span>
         <span className="more">{watchersCount === 0 ? 'Puntuar' : 'Ver puntuaciones'}<ChevronRight size={12} aria-hidden="true" /></span>
       </button>
-      {failed && <p className="error small">No se pudo guardar. Inténtalo de nuevo.</p>}
+      {failed && <p className="error small" role="alert">No se pudo guardar. Inténtalo de nuevo.</p>}
       {detail && (
         <TitleModal
           movie={m} r={r} me={me} onSave={onSave} onPending={onPending}

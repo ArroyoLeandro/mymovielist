@@ -1,15 +1,14 @@
-import { useEffect, useMemo, useRef, type CSSProperties } from 'react'
+import { useMemo, useRef, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { Bookmark, BookmarkCheck, Check, Plus, Send, Users, X } from 'lucide-react'
 import type { RatingRow } from '../api'
+import { useDialog } from '../lib/useDialog'
 import { useTitleActions } from '../lib/useTitleActions'
 import { scoreTier as tier } from '../lib/scores'
 import Poster from './Poster'
 import ScoreMeter from './ScoreMeter'
 import type { CardMovie, PendingFn, SaveFn } from './TitleCard'
-
-const FOCUSABLE = 'a[href], button:not(:disabled):not([tabindex="-1"]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
 
 /** Title detail: group stats, every viewer's score, and the user's own controls. */
 export default function TitleModal({ movie: m, r, me, onSave, onPending, studioName, sectionName, paused, onRecommend, onClose }: {
@@ -18,49 +17,7 @@ export default function TitleModal({ movie: m, r, me, onSave, onPending, studioN
 }) {
   const { watched, pending, score, failed, toggleWatched, wish, setScore } = useTitleActions(m.id, r, onSave, onPending)
   const dialog = useRef<HTMLDivElement>(null)
-  const opener = useRef<HTMLElement | null>(null)
-  const pausedRef = useRef(paused)
-  const closeRef = useRef(onClose)
-  closeRef.current = onClose
-
-  // Lock page scroll, remember the opener, restore both on close.
-  useEffect(() => {
-    opener.current = document.activeElement as HTMLElement | null
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    dialog.current?.focus()
-    return () => {
-      document.body.style.overflow = prev
-      if (opener.current?.isConnected) opener.current.focus()
-    }
-  }, [])
-  // The recommend dialog stacks on top: leave Esc/Tab to it, then take focus back when it closes.
-  useEffect(() => {
-    if (pausedRef.current && !paused) dialog.current?.focus()
-    pausedRef.current = paused
-  }, [paused])
-  // Esc closes; Tab wraps inside the dialog.
-  useEffect(() => {
-    const onKey = (e: globalThis.KeyboardEvent) => {
-      if (pausedRef.current) return
-      if (e.key === 'Escape') return void closeRef.current()
-      if (e.key !== 'Tab' || !dialog.current) return
-      const items = Array.from(dialog.current.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((el) => el.offsetParent !== null)
-      if (items.length === 0) return
-      const first = items[0]
-      const last = items[items.length - 1]
-      const active = document.activeElement
-      if (e.shiftKey && (active === first || active === dialog.current)) {
-        e.preventDefault()
-        last.focus()
-      } else if (!e.shiftKey && active === last) {
-        e.preventDefault()
-        first.focus()
-      }
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [])
+  useDialog(dialog, onClose, paused)
 
   const ratings = r?.ratings
   const people = useMemo(() => {
@@ -82,7 +39,7 @@ export default function TitleModal({ movie: m, r, me, onSave, onPending, studioN
   return createPortal(
     <div className="td-back" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="td" role="dialog" aria-modal="true" aria-labelledby={`td-title-${m.id}`} ref={dialog} tabIndex={-1}>
-        <button type="button" className="td-close" aria-label="Cerrar" onClick={onClose}><X size={20} aria-hidden="true" /></button>
+        <button type="button" className="btn btn-icon btn-overlay td-close" aria-label="Cerrar" onClick={onClose}><X size={20} aria-hidden="true" /></button>
         <div className="td-scroll">
           <header className={`td-head ${m.posterUrl ? 'has-bg' : ''}`} style={bg}>
             <div className="td-poster"><Poster url={m.posterUrl} title={m.title} /></div>
@@ -124,17 +81,17 @@ export default function TitleModal({ movie: m, r, me, onSave, onPending, studioN
 
           <section className="td-mine" aria-label="Tus controles">
             <div className="td-mine-top">
-              <button type="button" className={`td-btn ${watched ? 'on' : ''}`} aria-pressed={watched} onClick={toggleWatched}>
+              <button type="button" className={`btn btn-ghost ${watched ? 'on' : ''}`} aria-pressed={watched} onClick={toggleWatched}>
                 {watched ? <Check size={16} aria-hidden="true" /> : <Plus size={16} aria-hidden="true" />}
                 {watched ? 'Vista' : 'Marcar como vista'}
               </button>
               {!watched && (
-                <button type="button" className={`td-btn ${pending ? 'on' : ''}`} aria-pressed={pending} onClick={() => void wish()}>
+                <button type="button" className={`btn btn-ghost ${pending ? 'on' : ''}`} aria-pressed={pending} onClick={() => void wish()}>
                   {pending ? <BookmarkCheck size={16} aria-hidden="true" /> : <Bookmark size={16} aria-hidden="true" />}
                   {pending ? 'En pendientes' : 'Quiero verla'}
                 </button>
               )}
-              <button type="button" className="td-btn" aria-haspopup="dialog" onClick={onRecommend}>
+              <button type="button" className="btn btn-ghost" aria-haspopup="dialog" onClick={onRecommend}>
                 <Send size={16} aria-hidden="true" /> Recomendar
               </button>
             </div>
@@ -142,10 +99,10 @@ export default function TitleModal({ movie: m, r, me, onSave, onPending, studioN
             {failed && <p className="error small" role="alert">No se pudo guardar. Inténtalo de nuevo.</p>}
           </section>
 
-          <section className="td-people">
-            <h3>Quién la vio</h3>
+          <section className="td-people" aria-labelledby={`td-people-${m.id}`}>
+            <h3 id={`td-people-${m.id}`}>Quién la vio</h3>
             {people.length === 0 ? (
-              <p className="muted">Nadie la vio todavía.</p>
+              <p className="muted">Nadie del grupo la vio todavía. Márcala como vista y sé el primero en puntuarla.</p>
             ) : (
               <ul>
                 {people.map((x) => (

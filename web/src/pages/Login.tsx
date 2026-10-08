@@ -37,14 +37,14 @@ export default function Login() {
         <p className="muted">Elige tu etiqueta, escribe la contraseña del grupo y empieza a marcar lo que has visto. Una etiqueta nueva crea tu lista.</p>
         <label>
           Tu etiqueta
-          <input value={tag} onChange={(e) => setTag(e.target.value)} autoComplete="username" autoFocus required />
+          <input value={tag} onChange={(e) => setTag(e.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} autoFocus required />
         </label>
         <label>
           Contraseña del grupo
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
         </label>
         {error && <p className="error" role="alert">{error}</p>}
-        <button className="primary" disabled={busy}>{busy ? 'Entrando…' : 'Entrar'}</button>
+        <button type="submit" className="btn btn-primary btn-block" disabled={busy}>{busy ? 'Entrando…' : 'Entrar'}</button>
       </form>
     </div>
   )
