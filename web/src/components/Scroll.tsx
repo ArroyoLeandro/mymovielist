@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { ArrowLeft, ArrowUp } from 'lucide-react'
 import { useLocation, useNavigate, useNavigationType } from 'react-router-dom'
 
 /**
@@ -60,7 +61,7 @@ export function ToTopButton() {
       tabIndex={visible ? 0 : -1}
       onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
     >
-      <i aria-hidden="true" />
+      <ArrowUp size={18} aria-hidden="true" />
     </button>
   )
 }
@@ -74,7 +75,7 @@ export function BackButton() {
   const parent = pathname.startsWith('/studio/') ? '/estudios' : '/'
   return (
     <button type="button" className="back" onClick={() => (inApp ? nav(-1) : nav(parent, { replace: true }))}>
-      <span aria-hidden="true">←</span> Volver
+      <ArrowLeft size={16} aria-hidden="true" /> Volver
     </button>
   )
 }

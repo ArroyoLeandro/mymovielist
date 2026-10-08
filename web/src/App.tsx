@@ -1,4 +1,5 @@
 import { Navigate, NavLink, Route, Routes, useLocation, useParams } from 'react-router-dom'
+import { LogOut } from 'lucide-react'
 import { useAuth } from './auth'
 import Login from './pages/Login'
 import Home from './pages/Home'
@@ -35,7 +36,7 @@ export default function App() {
           <NavLink to={`/u/${user.tag}`} className={({ isActive }) => (isActive ? 'active' : '')}>Mi perfil</NavLink>
         </nav>
         <SearchBox />
-        <button className="ghost" onClick={logout} title={`Sesión iniciada como ${user.tag}`}>Cerrar sesión</button>
+        <button className="ghost" onClick={logout} title={`Sesión iniciada como ${user.tag}`}><LogOut size={16} aria-hidden="true" /> Cerrar sesión</button>
         </div>
       </header>
       <ScrollManager />

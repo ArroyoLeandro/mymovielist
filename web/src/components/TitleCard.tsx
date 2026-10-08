@@ -1,5 +1,6 @@
 import { memo, useRef, useState, type KeyboardEvent } from 'react'
 import type { RatingRow, TitleSummary } from '../api'
+import { Plus, Check, Bookmark, BookmarkCheck, Send } from 'lucide-react'
 import Poster from './Poster'
 import RecommendModal from './RecommendModal'
 
@@ -60,7 +61,7 @@ const TitleCard = memo(function TitleCard({ movie: m, r, me, onSave, onPending, 
             data-tip={watched ? 'Quitar de vistas' : 'Marcar como vista'}
             onClick={() => void onSave(m.id, !watched, null)}
           >
-            {watched ? '✓' : '+'}
+            {watched ? <Check size={16} strokeWidth={3} aria-hidden="true" /> : <Plus size={16} strokeWidth={2.5} aria-hidden="true" />}
           </button>
           {!watched && (
             <button
@@ -70,9 +71,7 @@ const TitleCard = memo(function TitleCard({ movie: m, r, me, onSave, onPending, 
               data-tip={pending ? 'Quitar de pendientes' : 'Quiero verla'}
               onClick={() => void wish()}
             >
-              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill={pending ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinejoin="round">
-                <path d="M6 3h12v18l-6-4.5L6 21z" />
-              </svg>
+              {pending ? <BookmarkCheck size={16} aria-hidden="true" /> : <Bookmark size={16} aria-hidden="true" />}
             </button>
           )}
           <button
@@ -82,9 +81,7 @@ const TitleCard = memo(function TitleCard({ movie: m, r, me, onSave, onPending, 
             data-tip="Recomendar a un amigo"
             onClick={() => setRecommending(true)}
           >
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 2 11 13M22 2l-7 20-4-9-9-4z" />
-            </svg>
+            <Send size={16} aria-hidden="true" />
           </button>
         </div>
       </div>

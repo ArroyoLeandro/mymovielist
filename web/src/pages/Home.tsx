@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { ArrowRight } from 'lucide-react'
 import { useAuth } from '../auth'
 import LiveCard from '../components/LiveCard'
 import Poster from '../components/Poster'
@@ -23,7 +24,7 @@ export default function Home() {
       ) : (
         home.data.rows.map((row) => {
           const link = row.link?.replace('/u/me', `/u/${me}`)
-          const action = link && <Link to={link}>Ver todo →</Link>
+          const action = link && <Link to={link}>Ver todo <ArrowRight size={14} aria-hidden="true" /></Link>
           return row.kind === 'sagas' ? (
             <SagaRow key={row.key} name={row.title} action={action}>
               {row.items.map((s) => (
