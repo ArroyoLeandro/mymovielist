@@ -695,7 +695,8 @@ final class Repository
                 [$fromId, $to['id'], $movieId]
             )->fetch();
             if ($existing) {
-                $this->run('UPDATE recommendations SET note = ?, created_at = ? WHERE id = ?', [$note, $now, $existing['id']]);
+                // Re-sending brings it back for a recipient who had dismissed it.
+                $this->run('UPDATE recommendations SET note = ?, created_at = ?, dismissed_at = NULL WHERE id = ?', [$note, $now, $existing['id']]);
             } else {
                 $this->run(
                     'INSERT INTO recommendations (from_user_id, to_user_id, movie_id, note, created_at) VALUES (?, ?, ?, ?, ?)',
@@ -711,6 +712,23 @@ final class Repository
     public function deleteRecommendation(int $id, int $userId): bool
     {
         return $this->run('DELETE FROM recommendations WHERE id = ? AND from_user_id = ?', [$id, $userId])->rowCount() > 0;
+    }
+
+    /** Recipient of a recommendation, or null when it does not exist. */
+    public function recommendationRecipient(int $id): ?int
+    {
+        $to = $this->run('SELECT to_user_id FROM recommendations WHERE id = ?', [$id])->fetchColumn();
+        return $to === false ? null : (int) $to;
+    }
+
+    /** Hides (or restores) a received recommendation for its recipient; the sender still sees it. Idempotent. */
+    public function setRecommendationDismissed(int $id, bool $dismissed): void
+    {
+        if ($dismissed) {
+            $this->run('UPDATE recommendations SET dismissed_at = COALESCE(dismissed_at, ?) WHERE id = ?', [date('Y-m-d H:i:s'), $id]);
+        } else {
+            $this->run('UPDATE recommendations SET dismissed_at = NULL WHERE id = ?', [$id]);
+        }
     }
 
     /**
@@ -739,7 +757,7 @@ final class Repository
         $toMe = $this->run(
             'SELECT ' . self::TITLE_COLS . ', r.id AS reco_id, r.note, r.created_at, f.tag AS from_tag,
                     mine.movie_id AS mine_movie, pend.movie_id AS pend_movie ' . self::TITLE_FROM . '
-             JOIN recommendations r ON r.movie_id = m.id AND r.to_user_id = ?
+             JOIN recommendations r ON r.movie_id = m.id AND r.to_user_id = ? AND r.dismissed_at IS NULL
              JOIN users f ON f.id = r.from_user_id
              LEFT JOIN watch_entries mine ON mine.movie_id = m.id AND mine.user_id = r.to_user_id
              LEFT JOIN watchlist pend ON pend.movie_id = m.id AND pend.user_id = r.to_user_id
@@ -747,7 +765,7 @@ final class Repository
             [$user['id']]
         )->fetchAll();
         $mine = $this->run(
-            'SELECT ' . self::TITLE_COLS . ', r.id AS reco_id, r.note, r.created_at, t.tag AS to_tag, t.tag_normalized AS to_norm,
+            'SELECT ' . self::TITLE_COLS . ', r.id AS reco_id, r.note, r.created_at, r.dismissed_at, t.tag AS to_tag, t.tag_normalized AS to_norm,
                     theirs.movie_id AS seen_movie, theirs.score AS their_score ' . self::TITLE_FROM . '
              JOIN recommendations r ON r.movie_id = m.id AND r.from_user_id = ?
              JOIN users t ON t.id = r.to_user_id
@@ -777,6 +795,7 @@ final class Repository
                 'createdAt' => self::iso($r['created_at']),
                 'watched' => $r['seen_movie'] !== null,
                 'score' => $r['their_score'] === null ? null : (int) $r['their_score'],
+                'dismissed' => $r['dismissed_at'] !== null,
             ];
         }
         $out['myRecommendations'] = array_values($groups);
@@ -928,7 +947,7 @@ final class Repository
             $this->titleQuery('JOIN watchlist wl ON wl.movie_id = m.id AND wl.user_id = ?', '', 'wl.added_at DESC, m.id', [$userId], 20));
         $titles('recommended', 'Te recomendaron', '/u/me?tab=recomendadas',
             $this->titleQuery(
-                'JOIN (SELECT movie_id, MAX(created_at) AS at FROM recommendations WHERE to_user_id = ? GROUP BY movie_id) rc ON rc.movie_id = m.id
+                'JOIN (SELECT movie_id, MAX(created_at) AS at FROM recommendations WHERE to_user_id = ? AND dismissed_at IS NULL GROUP BY movie_id) rc ON rc.movie_id = m.id
                  LEFT JOIN watch_entries mine ON mine.movie_id = m.id AND mine.user_id = ?',
                 'mine.movie_id IS NULL', 'rc.at DESC, m.id', [$userId, $userId], 20
             ));

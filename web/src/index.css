@@ -565,6 +565,18 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
 .reco-from b { color: var(--gold); font-weight: 600; }
 .reco-note { display: block; margin-top: var(--s1); font-size: 0.88rem; font-style: italic; overflow-wrap: anywhere; }
 .era > h2 > .reco-head { padding-bottom: 10px; }
+.reco-tools { display: flex; justify-content: flex-end; margin: var(--s2) 0; }
+.reco-dismiss { width: 30px; padding: 0; justify-content: center; border-radius: 50%; }
+.tag.muted-tag { border-style: dashed; opacity: 0.8; }
+/* "Deshacer" after dismissing a recommendation: floating, announced through the role="status" wrapper. */
+.undo-toast {
+  position: fixed; left: 50%; bottom: var(--s4); translate: -50% 0; z-index: 40;
+  display: flex; align-items: center; gap: var(--s3); width: max-content; max-width: calc(100vw - 32px);
+  padding: var(--s2) var(--s2) var(--s2) var(--s4); border: 1px solid var(--line-strong); border-radius: var(--r-pill);
+  background: var(--panel-2); box-shadow: var(--shadow-dialog); font-size: 0.88rem;
+  animation: pop 0.18s var(--ease);
+}
+.undo-toast span { overflow-wrap: anywhere; }
 .reco-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
 .reco-head em { color: var(--muted); font-size: 0.85rem; font-style: normal; font-weight: 500; }
 @media (max-width: 719.98px) {

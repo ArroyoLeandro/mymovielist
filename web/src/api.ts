@@ -98,7 +98,8 @@ export interface ListEntry {
   watchedAt: string
 }
 export interface Recommended { id: number; movie: TitleSummary; from: string; note: string | null; createdAt: string; watched: boolean; pending: boolean }
-export interface MyRecommendation { id: number; movie: TitleSummary; note: string | null; createdAt: string; watched: boolean; score: number | null }
+/** `dismissed`: the recipient removed it from their list (the sender keeps it). */
+export interface MyRecommendation { id: number; movie: TitleSummary; note: string | null; createdAt: string; watched: boolean; score: number | null; dismissed: boolean }
 export interface Profile {
   user: { tag: string }
   stats: {
@@ -172,4 +173,7 @@ export const api = {
   recommend: (id: number, toTags: string[], note: string) =>
     request<{ sentTo: string[] }>('POST', `/movies/${id}/recommendations`, { toTags, note: note.trim() || null }),
   deleteRecommendation: (id: number) => request<void>('DELETE', `/recommendations/${id}`),
+  /** Recipient only: hide a received recommendation (true) or undo that (false). */
+  dismissRecommendation: (id: number, dismissed: boolean) =>
+    request<void>(dismissed ? 'POST' : 'DELETE', `/recommendations/${id}/dismiss`),
 }

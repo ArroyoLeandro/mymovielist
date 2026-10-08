@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { api, type ListEntry, type Profile as ProfileData, type TitleSummary } from '../api'
@@ -6,7 +6,7 @@ import { useAuth } from '../auth'
 import { ProviderStrip } from '../components/Providers'
 import Poster from '../components/Poster'
 import StudioLogo from '../components/StudioLogo'
-import { Bookmark, Eye, Inbox, Send } from 'lucide-react'
+import { Bookmark, Eye, Inbox, Send, X } from 'lucide-react'
 import { ProfileSkeleton } from '../components/Skeleton'
 import { EmptyState, ErrorState } from '../components/States'
 import Tabs, { type TabItem } from '../components/Tabs'
@@ -22,6 +22,9 @@ const SORTS: Record<Sort, (a: ListEntry, b: ListEntry) => number> = {
   year: (a, b) => b.movie.year - a.movie.year || a.movie.title.localeCompare(b.movie.title),
   recent: (a, b) => b.watchedAt.localeCompare(a.watchedAt),
 }
+
+/** How long the "Deshacer" action stays available after dismissing a recommendation. */
+const UNDO_MS = 5000
 
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })
 
@@ -65,8 +68,15 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
   const [closed, setClosed] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState<number | null>(null)
   const [failed, setFailed] = useState(false)
+  // Received recommendations dismissed in this session: hidden right away (optimistic), restored on undo or failure.
+  const [hidden, setHidden] = useState<Set<number>>(new Set())
+  const [undo, setUndo] = useState<{ ids: number[]; text: string } | null>(null)
+  const undoTimer = useRef<number | undefined>(undefined)
+  const dismissing = useRef<Promise<unknown>>(Promise.resolve())
+  useEffect(() => () => window.clearTimeout(undoTimer.current), [])
 
-  const received = data.recommendedToMe ?? []
+  const received = (data.recommendedToMe ?? []).filter((r) => !hidden.has(r.id))
+  const receivedSeen = received.filter((r) => r.watched)
   const sent = data.myRecommendations ?? []
   const tabs: TabItem<Tab>[] = [
     { id: 'vistas', label: 'Vistas', count: data.stats.watchedCount },
@@ -98,6 +108,45 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
       setFailed(true)
     } finally {
       setBusy(null)
+    }
+  }
+
+  const refresh = () => Promise.all(DYNAMIC_KEYS.map((k) => qc.invalidateQueries({ queryKey: [k] })))
+  const setHiddenIds = (ids: number[], on: boolean) =>
+    setHidden((h) => {
+      const n = new Set(h)
+      ids.forEach((id) => (on ? n.add(id) : n.delete(id)))
+      return n
+    })
+
+  // Dismiss for the recipient only: the sender keeps it in "Mis recomendaciones". Undo stays available for UNDO_MS.
+  const dismiss = (ids: number[], text: string) => {
+    setFailed(false)
+    setHiddenIds(ids, true)
+    setUndo({ ids, text })
+    window.clearTimeout(undoTimer.current)
+    undoTimer.current = window.setTimeout(() => setUndo(null), UNDO_MS)
+    const run = Promise.all(ids.map((id) => api.dismissRecommendation(id, true)))
+    dismissing.current = run.catch(() => undefined)
+    run.then(refresh, () => {
+      setHiddenIds(ids, false)
+      setUndo(null)
+      setFailed(true)
+    })
+  }
+
+  const undoDismiss = async () => {
+    if (!undo) return
+    const { ids } = undo
+    window.clearTimeout(undoTimer.current)
+    setUndo(null)
+    try {
+      await dismissing.current // never let the undo overtake the dismiss it reverts
+      await Promise.all(ids.map((id) => api.dismissRecommendation(id, false)))
+      await refresh()
+      setHiddenIds(ids, false)
+    } catch {
+      setFailed(true)
     }
   }
 
@@ -154,6 +203,14 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
 
       <Tabs label="Secciones del perfil" items={tabs} value={tab} onChange={setTab} className="profile-tabs" />
       {failed && <p className="error small" role="alert">No se pudo completar la acción. Inténtalo de nuevo.</p>}
+      <div role="status">
+        {undo && (
+          <div className="undo-toast">
+            <span>{undo.text}</span>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => void undoDismiss()}>Deshacer</button>
+          </div>
+        )}
+      </div>
 
       {tab === 'vistas' && (
         stats.watchedCount === 0 ? (
@@ -248,10 +305,31 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
 
       {tab === 'recomendadas' && own && (
         received.length === 0 ? (
-          <EmptyState icon={Inbox} title="Todavía nadie te recomendó nada">
-            Cuando alguien del grupo te recomiende un título, va a aparecer aquí.
-          </EmptyState>
+          hidden.size > 0 ? (
+            <EmptyState icon={Inbox} title="No te quedan recomendaciones">
+              Las que quitaste ya no aparecen aquí; quien te las mandó las sigue viendo.
+            </EmptyState>
+          ) : (
+            <EmptyState icon={Inbox} title="Todavía nadie te recomendó nada">
+              Cuando alguien del grupo te recomiende un título, va a aparecer aquí.
+            </EmptyState>
+          )
         ) : (
+          <>
+          {receivedSeen.length > 0 && (
+            <div className="reco-tools">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => dismiss(
+                  receivedSeen.map((r) => r.id),
+                  receivedSeen.length === 1 ? 'Quitaste 1 recomendación que ya viste.' : `Quitaste ${receivedSeen.length} recomendaciones que ya viste.`,
+                )}
+              >
+                Quitar las que ya vi ({receivedSeen.length})
+              </button>
+            </div>
+          )}
           <ul className="list">
             {received.map((r) => (
               <TitleRow
@@ -271,6 +349,16 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
                         <button type="button" className="btn btn-primary btn-sm" disabled={busy === r.id} onClick={() => void act(r.id, () => api.saveEntry(r.movie.id, true, null))}>La vi</button>
                       </>
                     )}
+                    <button
+                      type="button"
+                      className="btn btn-quiet btn-sm reco-dismiss"
+                      title="Quitar de mis recomendaciones"
+                      aria-label={`Quitar ${r.movie.title} (de @${r.from}) de mis recomendaciones`}
+                      disabled={busy === r.id}
+                      onClick={() => dismiss([r.id], `Quitaste «${r.movie.title}» de tus recomendaciones.`)}
+                    >
+                      <X size={16} aria-hidden="true" />
+                    </button>
                   </span>
                 }
               >
@@ -279,6 +367,7 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
               </TitleRow>
             ))}
           </ul>
+          </>
         )
       )}
 
@@ -305,6 +394,7 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
                           ) : (
                             <span className="tag">Pendiente</span>
                           )}
+                          {i.dismissed && <span className="tag muted-tag" title={`@${g.toTag} la quitó de sus recomendaciones`}>Descartada</span>}
                           <button type="button" className="btn btn-ghost btn-sm" disabled={busy === i.id} onClick={() => void act(i.id, () => api.deleteRecommendation(i.id))} aria-label={`Eliminar la recomendación de ${i.movie.title} a @${g.toTag}`}>Eliminar</button>
                         </span>
                       }

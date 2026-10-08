@@ -101,6 +101,7 @@ CREATE TABLE recommendations (
     movie_id INT UNSIGNED NOT NULL,
     note VARCHAR(280) NULL,
     created_at DATETIME NOT NULL,
+    dismissed_at DATETIME NULL,            -- set when the recipient dismisses it; the sender still sees it
     PRIMARY KEY (id),
     UNIQUE KEY uq_reco (from_user_id, to_user_id, movie_id),
     KEY idx_reco_to (to_user_id),

@@ -121,3 +121,7 @@ API (all behind the session):
 - `GET /api/titles` filters: `provider=<id>[,<id>]` and `ptype=flatrate|rent|buy|any` (`flatrate` also matches `free` and `ads`; without `ptype` any type matches; `ptype` alone means "has any provider of that type").
 
 Production runbook: back up, apply 006, upload `api/`, run `php _app/bin/refresh-providers.php` once (SSH, or a one-off cron with `--stale-days=0`), then add the weekly cron above.
+
+### Dismissing received recommendations (migration 007)
+
+Apply `api/database/migrations/007_recommendation_dismiss.sql` once (adds `recommendations.dismissed_at`; additive and re-runnable, no data is touched). `POST /api/recommendations/{id}/dismiss` hides a received recommendation for its recipient (403 for anyone else, 404 if unknown) and `DELETE /api/recommendations/{id}/dismiss` undoes it; the sender still sees it (with `dismissed: true`) and re-sending it brings it back. Production runbook: back up, apply 007, upload `api/` and the `web` build.

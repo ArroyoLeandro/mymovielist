@@ -174,6 +174,18 @@ try {
             throw new HttpError(404, 'Recommendation not found.');
         }
         Http::noContent();
+    } elseif (preg_match('#^/api/recommendations/(\d+)/dismiss$#', $path, $m) && ($method === 'POST' || $method === 'DELETE')) {
+        // Recipient only: POST hides it from their lists, DELETE undoes that. The sender's history is untouched.
+        $recoId = (int) $m[1];
+        $to = $repo->recommendationRecipient($recoId);
+        if ($to === null) {
+            throw new HttpError(404, 'Recommendation not found.');
+        }
+        if ($to !== $current['id']) {
+            throw new HttpError(403, 'Only the recipient can dismiss a recommendation.');
+        }
+        $repo->setRecommendationDismissed($recoId, $method === 'POST');
+        Http::noContent();
     }
 
     throw new HttpError(404, 'Not found.');
