@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App'
 import { AuthProvider } from './auth'
 import './index.css'
+import './title-modal.css'
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1 } } })
 

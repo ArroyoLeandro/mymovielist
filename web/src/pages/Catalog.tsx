@@ -117,6 +117,7 @@ function CatalogView({ slug }: { slug: string }) {
   const all = useMemo(() => sections?.flatMap((s) => s.movies) ?? [], [sections])
   const haystack = useMemo(() => new Map(all.map((m) => [m.id, norm(`${m.title} ${m.originalTitle ?? ''}`)])), [all])
   const titleById = useMemo(() => new Map(all.map((m) => [m.id, m])), [all])
+  const sectionOf = useMemo(() => new Map((sections ?? []).flatMap((s) => s.movies.map((m) => [m.id, s.name] as const))), [sections])
   const inSaga = useMemo(() => new Set(sagas?.flatMap((s) => s.titleIds) ?? []), [sagas])
   // Movies tab: movies outside any saga, keeping the studio's sections. Series tab: every series.
   const movieSections = useMemo(
@@ -163,6 +164,7 @@ function CatalogView({ slug }: { slug: string }) {
   }
   if (!catalog.data || !sections || !sagas || !ratings.data) return <CatalogSkeleton />
 
+  const studioName = catalog.data.studio.name
   const watchedCount = ratings.data.filter((r) => r.watched).length
   const pct = all.length ? Math.round((watchedCount / all.length) * 100) : 0
 
@@ -231,7 +233,7 @@ function CatalogView({ slug }: { slug: string }) {
 
       {tab === 'sagas' && shownSagas.map(({ sg, movies, visibleMovies }) => (
         <SagaRow key={sg.slug} id={`saga-${sg.slug}`} name={sg.name} count={movies.length} seen={movies.filter((m) => byId.get(m.id)?.watched).length}>
-          {visibleMovies.map((m) => <TitleCard key={m.id} movie={m} r={byId.get(m.id)} me={me} onSave={onSave} onPending={onPending} />)}
+          {visibleMovies.map((m) => <TitleCard key={m.id} movie={m} r={byId.get(m.id)} me={me} onSave={onSave} onPending={onPending} studioName={studioName} sectionName={sectionOf.get(m.id)} />)}
         </SagaRow>
       ))}
 
@@ -260,7 +262,7 @@ function CatalogView({ slug }: { slug: string }) {
                 </h2>
                 {open && (
                   <div className="grid era-body">
-                    {movies.map((m) => <TitleCard key={m.id} movie={m} r={byId.get(m.id)} me={me} onSave={onSave} onPending={onPending} />)}
+                    {movies.map((m) => <TitleCard key={m.id} movie={m} r={byId.get(m.id)} me={me} onSave={onSave} onPending={onPending} studioName={studioName} sectionName={s.name} />)}
                   </div>
                 )}
               </section>
@@ -271,7 +273,7 @@ function CatalogView({ slug }: { slug: string }) {
 
       {tab === 'series' && (
         <div className="grid era era-body">
-          {shownSeries.map((m) => <TitleCard key={m.id} movie={m} r={byId.get(m.id)} me={me} onSave={onSave} onPending={onPending} />)}
+          {shownSeries.map((m) => <TitleCard key={m.id} movie={m} r={byId.get(m.id)} me={me} onSave={onSave} onPending={onPending} studioName={studioName} sectionName={sectionOf.get(m.id)} />)}
         </div>
       )}
 

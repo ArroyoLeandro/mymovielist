@@ -42,5 +42,5 @@ export default function LiveCard({ item, me, showStudio = false }: { item: State
     }
   }, [item.state, refresh])
 
-  return <TitleCard movie={item} r={local ?? item.state} me={me} onSave={onSave} onPending={onPending} label={showStudio ? item.studio.name : undefined} />
+  return <TitleCard movie={item} r={local ?? item.state} me={me} onSave={onSave} onPending={onPending} label={showStudio ? item.studio.name : undefined} studioName={item.studio.name} sectionName={item.section.name} />
 }
