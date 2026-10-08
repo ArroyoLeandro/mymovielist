@@ -5,15 +5,38 @@ declare(strict_types=1);
 // Front controller: routes only. SQL is in Repository, auth in Auth, JSON helpers in Http.
 
 use App\Auth;
+use App\CatalogImporter;
 use App\Db;
 use App\Http;
 use App\HttpError;
 use App\Repository;
+use App\TmdbClient;
+use App\TmdbSearch;
+use App\WatchProviders;
 
 require __DIR__ . '/../src/Http.php';
 require __DIR__ . '/../src/Db.php';
 require __DIR__ . '/../src/Auth.php';
 require __DIR__ . '/../src/Repository.php';
+// TMDB-backed features (search, manual import, admin sync) load their classes on demand.
+spl_autoload_register(function (string $class): void {
+    $file = __DIR__ . '/../src/' . substr($class, 4) . '.php';
+    if (strncmp($class, 'App\\', 4) === 0 && is_file($file)) {
+        require $file;
+    }
+});
+
+/** TMDB client for web requests: shared disk cache, responses kept 24 h. */
+function tmdbClient(array $config): TmdbClient
+{
+    $cfg = $config['tmdb'] ?? [];
+    $tmdb = new TmdbClient((string) ($cfg['api_key'] ?? ''), (string) ($cfg['read_token'] ?? ''), __DIR__ . '/../storage/tmdb-cache',
+        (string) ($cfg['ca_bundle'] ?? (getenv('SSL_CERT_FILE') ?: '')), 86400);
+    if (!$tmdb->hasCredentials()) {
+        throw new HttpError(503, 'TMDB is not configured on the server.', 'tmdb_unavailable');
+    }
+    return $tmdb;
+}
 
 $configFile = getenv('DISNEY_CONFIG') ?: __DIR__ . '/../config/config.php';
 
@@ -126,6 +149,71 @@ try {
     } elseif ($path === '/api/providers' && $method === 'GET') {
         // Static (changes only when bin/refresh-providers.php runs): cacheable. ?used=1 = providers with >= 1 title.
         Http::jsonCached($repo->providers(($_GET['used'] ?? '') === '1'));
+    } elseif ($path === '/api/tmdb/search' && $method === 'GET') {
+        // "¿No está? Agregalo": TMDB movies and series, max 20 searches per minute per session, cached 24 h.
+        $q = isset($_GET['q']) && is_string($_GET['q']) ? TmdbSearch::normalize($_GET['q']) : '';
+        $len = function_exists('mb_strlen') ? mb_strlen($q, 'UTF-8') : strlen($q);
+        if ($len < 2 || $len > 100) {
+            throw new HttpError(422, 'The query needs 2 to 100 characters.', 'bad_query');
+        }
+        $now = time();
+        $recent = array_values(array_filter((array) ($_SESSION['tmdb_search'] ?? []), function ($t) use ($now) {
+            return (int) $t > $now - 60;
+        }));
+        if (count($recent) >= 20) {
+            header('Retry-After: ' . max(1, 60 - ($now - (int) $recent[0])));
+            throw new HttpError(429, 'Too many searches, wait a moment.', 'rate_limited', ['retryAfter' => max(1, 60 - ($now - (int) $recent[0]))]);
+        }
+        $recent[] = $now;
+        $_SESSION['tmdb_search'] = $recent;
+        session_write_close(); // TMDB can take a moment: do not block the user's other requests
+        try {
+            $results = (new TmdbSearch(tmdbClient($config), $repo))->search($q);
+        } catch (HttpError $e) {
+            throw $e;
+        } catch (RuntimeException $e) {
+            error_log('TMDB search failed: ' . $e->getMessage());
+            throw new HttpError(502, 'TMDB did not answer, try again.', 'tmdb_unavailable');
+        }
+        Http::json(['query' => $q, 'results' => $results]);
+    } elseif ($path === '/api/titles/import' && $method === 'POST') {
+        // Adds a TMDB title to the catalog (idempotent): placed by the studio definitions or in its category.
+        $body = Http::jsonBody();
+        $tmdbId = $body['tmdbId'] ?? null;
+        $media = $body['mediaType'] ?? null;
+        if (!is_int($tmdbId) || $tmdbId <= 0 || !in_array($media, ['movie', 'series', 'tv'], true)) {
+            throw new HttpError(422, '"tmdbId" must be a positive integer and "mediaType" "movie" or "series".', 'bad_request');
+        }
+        session_write_close();
+        set_time_limit(60);
+        $tmdb = tmdbClient($config);
+        $pdo = Db::connect($config['db']);
+        try {
+            $res = (new CatalogImporter($pdo, $tmdb, (array) ($config['catalog'] ?? [])))->importManual($media === 'movie' ? 'movie' : 'tv', $tmdbId, $current['id']);
+        } catch (DomainException $e) {
+            throw new HttpError(422, 'Only released titles can be added.', 'unreleased');
+        } catch (PDOException $e) {
+            throw $e;
+        } catch (RuntimeException $e) {
+            error_log('Manual import failed: ' . $e->getMessage());
+            throw new HttpError(502, 'TMDB did not answer, try again.', 'tmdb_unavailable');
+        }
+        if ($res === null) {
+            throw new HttpError(404, 'TMDB does not know this title.', 'not_found');
+        }
+        if ($res['created']) {
+            try {
+                (new WatchProviders($pdo, $tmdb, strtoupper((string) ($config['tmdb']['watch_country'] ?? 'AR'))))
+                    ->refreshOne($res['id'], $media === 'movie' ? 'movie' : 'series', $tmdbId);
+            } catch (Throwable $e) {
+                error_log('Providers for a manual import failed (the weekly sync retries): ' . $e->getMessage());
+            }
+        }
+        Http::json([
+            'created' => $res['created'],
+            'title' => $repo->titleById($res['id'], $current['id']),
+            'studio' => $repo->studioOfTitle($res['id']),
+        ], $res['created'] ? 201 : 200);
     } elseif ($path === '/api/search' && $method === 'GET') {
         $q = isset($_GET['q']) && is_string($_GET['q']) ? $_GET['q'] : '';
         Http::json($repo->search($q, $current['id']));
@@ -190,7 +278,7 @@ try {
 
     throw new HttpError(404, 'Not found.');
 } catch (HttpError $e) {
-    Http::json(['error' => $e->getMessage()], $e->status);
+    Http::json(['error' => $e->getMessage()] + ($e->reason !== null ? ['code' => $e->reason] : []) + $e->extra, $e->status);
 } catch (Throwable $e) {
     error_log((string) $e);
     Http::json(['error' => 'Internal server error.'], 500);

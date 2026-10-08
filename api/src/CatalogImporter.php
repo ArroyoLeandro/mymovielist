@@ -861,15 +861,9 @@ final class CatalogImporter
         return $refs;
     }
 
-    private const DETAILS_PARAMS = [
-        'language' => 'es-MX',
-        'append_to_response' => 'alternative_titles,translations,images',
-        'include_image_language' => 'es,null',
-    ];
-
     public function fetchDetails(string $media, int $id): ?array
     {
-        $d = $this->tmdb->get('/' . $media . '/' . $id, self::DETAILS_PARAMS);
+        $d = $this->tmdb->get('/' . $media . '/' . $id, TmdbResolver::DETAILS_PARAMS);
         return isset($d['_not_found']) ? null : $d;
     }
 
@@ -882,7 +876,7 @@ final class CatalogImporter
     {
         $requests = [];
         foreach ($refs as $ref) {
-            $requests[$ref['media'] . ':' . $ref['id']] = ['/' . $ref['media'] . '/' . (int) $ref['id'], self::DETAILS_PARAMS];
+            $requests[$ref['media'] . ':' . $ref['id']] = ['/' . $ref['media'] . '/' . (int) $ref['id'], TmdbResolver::DETAILS_PARAMS];
         }
         return array_filter($this->tmdb->getMany($requests), function ($d) {
             return !isset($d['_not_found']);

@@ -8,6 +8,12 @@ namespace App;
 final class TmdbResolver
 {
     public const IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
+    /** Details request used to resolve a title (importer, manual import and search share the disk cache). */
+    public const DETAILS_PARAMS = [
+        'language' => 'es-MX',
+        'append_to_response' => 'alternative_titles,translations,images',
+        'include_image_language' => 'es,null',
+    ];
 
     // Mexican Spanish is the reference for the whole region (Mexican dubs), so MX goes first.
     private const OTHER_LATAM_ALT = ['AR', 'UY', 'CL', 'PY', 'BO', 'PE', 'EC', 'CO', 'VE'];

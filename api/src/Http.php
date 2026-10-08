@@ -9,11 +9,17 @@ final class HttpError extends \RuntimeException
 {
     /** @var int */
     public $status;
+    /** @var string|null machine-readable reason for the client (JSON "code") */
+    public $reason;
+    /** @var array<string, mixed> extra JSON fields */
+    public $extra;
 
-    public function __construct(int $status, string $message)
+    public function __construct(int $status, string $message, ?string $reason = null, array $extra = [])
     {
         parent::__construct($message);
         $this->status = $status;
+        $this->reason = $reason;
+        $this->extra = $extra;
     }
 }
 
