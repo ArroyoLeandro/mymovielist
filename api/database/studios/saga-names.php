@@ -9,7 +9,7 @@ return [
     'collection:119' => 'El Señor de los Anillos',
     'collection:1570' => 'Duro de matar',
     'collection:87359' => 'Misión imposible',
-    'collection:8945' => 'Hombres de negro',
+    'collection:8945' => 'Mad Max',
     'collection:2980' => 'Cazafantasmas',
     'collection:9485' => 'Rápidos y furiosos',
     'collection:1734218' => 'Pentateuco de DreamWorks',

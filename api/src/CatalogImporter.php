@@ -20,6 +20,8 @@ use PDOException;
  *     Películas / Series categories), and a movie trending now (popularity >= 150 with >= 20 votes) also enters;
  *   - grace: titles released in the last `grace_months` (18) that are already in the catalog are never dropped or
  *     pruned; after that they must meet the normal threshold.
+ * Exclusions (database/studios/exclusions.php): titles of the listed production companies (mockbusters) and listed
+ * titles (pilots duplicating their series) are never imported by any source; rows already in the catalog become orphans.
  * Prune deletes the unprotected rows a studio no longer claims; `max_prune` skips a studio whose prune would delete
  * more rows than that (an unattended run must not empty a catalog after a bad TMDB response).
  */
@@ -47,6 +49,8 @@ final class CatalogImporter
     private $log;
     /** @var array<string, int|null> collection memo for one importer instance */
     private $collectionMemo = [];
+    /** @var array{companies: list<int>, titles: array<string, true>}|null database/studios/exclusions.php, loaded once */
+    private $exclusions = null;
 
     public function __construct(PDO $pdo, TmdbClient $tmdb, array $rules = [], ?callable $log = null)
     {
@@ -60,6 +64,12 @@ final class CatalogImporter
     private function say(string $line = ''): void
     {
         ($this->log)($line);
+    }
+
+    /** @return array{companies: list<int>, titles: array<string, true>} */
+    private function exclusions(): array
+    {
+        return $this->exclusions ?? ($this->exclusions = StudioDefinitions::exclusions());
     }
 
     /** First release date that still counts as recent for a window of $months (null when disabled). */
@@ -204,15 +214,19 @@ final class CatalogImporter
         }
 
         // 1. Resolve every section's titles from TMDB (each title appears in the first section that claims it).
+        // Excluded titles/companies (exclusions.php) are dropped from every source; section exclude_ids only there.
+        $exclusions = $this->exclusions();
         $seen = [];
         $resolved = []; // section slug => list of items
         foreach ($def['sections'] as $section) {
             $exclude = array_flip($section['exclude_ids'] ?? []);
             $items = [];
-            $skipped = ['dupe' => 0, 'unreleased' => 0, 'missing' => 0, 'lowvotes' => 0];
+            $skipped = ['dupe' => 0, 'unreleased' => 0, 'missing' => 0, 'lowvotes' => 0, 'excluded' => 0];
             $refs = [];
             foreach ($this->collectSection($section, $defaultMin, $today, $recentCut) as $ref) {
-                if (!isset($exclude[$ref['id']])) {
+                if (isset($exclusions['titles'][$ref['media'] . ':' . $ref['id']])) {
+                    $skipped['excluded']++;
+                } elseif (!isset($exclude[$ref['id']])) {
                     $refs[] = $ref;
                 }
             }
@@ -229,6 +243,10 @@ final class CatalogImporter
                     $d = $details[$key] ?? null;
                     if ($d === null) {
                         $skipped['missing']++;
+                        continue;
+                    }
+                    if (StudioDefinitions::isExcluded($d, $ref['media'], $exclusions)) {
+                        $skipped['excluded']++; // e.g. a mockbuster that reached a collection or ids source
                         continue;
                     }
                     $date = (string) ($d[$ref['media'] === 'tv' ? 'first_air_date' : 'release_date'] ?? '');
@@ -264,7 +282,8 @@ final class CatalogImporter
                 return [$a['date'], $a['title']] <=> [$b['date'], $b['title']];
             });
             $resolved[$section['slug']] = $items;
-            $this->say(sprintf('[%s] %d titles (skipped: %d duplicates, %d unreleased, %d not found, %d below vote threshold)', $section['slug'], count($items), $skipped['dupe'], $skipped['unreleased'], $skipped['missing'], $skipped['lowvotes']));
+            $this->say(sprintf('[%s] %d titles (skipped: %d duplicates, %d unreleased, %d not found, %d below vote threshold%s)', $section['slug'], count($items), $skipped['dupe'], $skipped['unreleased'], $skipped['missing'], $skipped['lowvotes'],
+                $skipped['excluded'] ? ", {$skipped['excluded']} excluded" : ''));
         }
 
         // Resolution is done (and cached): the rest must not stop halfway because of a caller's time budget.
@@ -806,6 +825,12 @@ final class CatalogImporter
             $params += ['with_runtime.gte' => 40, 'without_genres' => '99'];
         } else {
             $params += ['without_genres' => '99'];
+        }
+        // Excluded companies (exclusions.php) are left out by TMDB itself ('|' = any of); the details check is the safety net.
+        $blocked = $this->exclusions()['companies'];
+        if ($blocked) {
+            $own = isset($params['without_companies']) ? array_map('intval', preg_split('/[,|]/', (string) $params['without_companies']) ?: []) : [];
+            $params['without_companies'] = implode('|', array_unique(array_merge($own, $blocked)));
         }
         $refs = $this->discover($media, $params, (int) ($source['max_pages'] ?? 50), $source);
 

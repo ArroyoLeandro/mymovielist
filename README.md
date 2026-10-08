@@ -168,3 +168,16 @@ Setup: `php bin/hash-password.php "<admin password>"` and put the hash in `admin
 4. Upload `api/` (new `src/` classes, `bin/weekly-sync.php`, `public/index.php`) and the `web` build.
 5. Replace the providers cron with the weekly-sync cron above.
 6. Optionally run the first sync from `/admin` ("Sincronizar todo") and watch it; otherwise the cron does it on Monday.
+
+### Duplicates, mockbusters and pilots (migration 009)
+
+- `api/database/studios/exclusions.php` lists what no studio or category ever imports: production companies (The Asylum, TMDB company 1311, and its affiliates 152189 / 282681: mockbusters such as the 2026 "The Odyssey" that entered Películas under the recent-release rule) and single titles (`movie:<id>` / `tv:<id>`, e.g. the Batman Beyond pilot movie). Companies are sent as `without_companies` to every discover call and also checked against each title's details, so collection and `ids` sources are covered too. Excluded rows already in the catalog become orphans (pruned unless protected), so merge them first. Manual additions from the search are not affected.
+- Pilot TV movies duplicating their series: sections that discover movies should exclude genre 10770 (TV Movie), as the Lucasfilm animated films now do; pilots TMDB does not tag go in `exclusions.php`.
+- Remakes that share a Spanish title are different titles: never merge them.
+- `php bin/merge-titles.php --from=<id> --to=<id> [--dry-run] [--allow-cross-media]` merges a duplicate into the title that stays, in one transaction: watch entries move (when the user has both: highest non-null score, earliest date), watchlist is a union (earliest date), recommendations move (same sender and recipient on both: earliest date, dismissed only if both were), then the duplicate and its provider rows are deleted. It refuses equal or missing ids, different media types without `--allow-cross-media` (a pilot movie into its series) and unknown tables that reference titles. `--dry-run` runs everything and rolls back. Always exclude the merged title from the importer too, or the next sync adds it back.
+
+Production runbook (S1, no SSH: phpMyAdmin):
+
+1. Back up the database (phpMyAdmin > Export).
+2. Upload `api/` first (exclusions, importer, studio definitions): an import with the old code after step 3 would add the duplicates back.
+3. Run `api/database/migrations/009_merge_duplicates.sql` in phpMyAdmin's SQL tab. It merges #3330 -> #3331 (The Asylum's "The Odyssey" into Nolan's), #901 -> #1155 (Batman Beyond movie into the series) and #649 -> #125 (Star Wars Rebels pilot into the series) with the rules above, moves the Waverly Place movies into the `waverly-place` saga and renames the TMDB collection 8945 to "Mad Max". Every row is matched by id and TMDB id, so it cannot touch other titles, and running it again changes nothing. The final `SELECT` must show `0, 1, 0, 1`.

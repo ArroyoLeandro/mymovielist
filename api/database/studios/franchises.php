@@ -27,7 +27,7 @@ return [
             'tv:202555', 'tv:198178',
         ],
     ],
-    'waverly-place' => ['name' => 'Los Hechiceros de Waverly Place', 'titles' => ['tv:3498', 'tv:245026']],
+    'waverly-place' => ['name' => 'Los Hechiceros de Waverly Place', 'tmdb_collections' => [413935], 'titles' => ['tv:3498', 'tv:245026']],
     'suite-life' => ['name' => 'Zack y Cody', 'titles' => ['tv:4605', 'tv:15079']],
     'ravens' => ['name' => 'Es Tan Raven', 'titles' => ['tv:4602', 'tv:119', 'tv:72027']],
     // --- Anime (series + movies in one saga; ids that are not imported are ignored) ---

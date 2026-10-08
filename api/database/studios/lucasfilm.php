@@ -17,7 +17,7 @@ return [
         [
             'slug' => 'animated-films', 'name' => 'Películas animadas', 'period' => '2008-presente',
             'source' => ['type' => 'discover', 'media' => 'movie', 'params' => [
-                'with_companies' => '1|108270', 'with_genres' => '16', 'without_genres' => '99', 'vote_count.gte' => 50,
+                'with_companies' => '1|108270', 'with_genres' => '16', 'without_genres' => '99,10770', 'vote_count.gte' => 50,
             ]],
         ],
         [

@@ -12,7 +12,7 @@ namespace App;
 final class StudioDefinitions
 {
     /** Files in database/studios that are data, not studios. */
-    private const NOT_STUDIOS = ['title-overrides', 'always-keep', 'franchises', 'saga-names', 'studio-order'];
+    private const NOT_STUDIOS = ['title-overrides', 'always-keep', 'franchises', 'saga-names', 'studio-order', 'exclusions'];
     /** Catch-all categories: imported last so the studios keep their titles. */
     private const CATEGORIES = ['anime', 'series', 'peliculas'];
 
@@ -62,6 +62,32 @@ final class StudioDefinitions
     public static function isCategory(string $slug): bool
     {
         return in_array($slug, self::CATEGORIES, true);
+    }
+
+    /**
+     * Global exclusions (database/studios/exclusions.php): production companies and single titles no source imports.
+     * @return array{companies: list<int>, titles: array<string, true>} titles keyed 'movie:<id>' / 'tv:<id>'
+     */
+    public static function exclusions(): array
+    {
+        $file = self::dir() . '/exclusions.php';
+        $x = is_file($file) ? require $file : [];
+        return [
+            'companies' => array_values(array_map('intval', array_keys($x['companies'] ?? []))),
+            'titles' => array_fill_keys(array_keys($x['titles'] ?? []), true),
+        ];
+    }
+
+    /**
+     * Is a title excluded: listed by id, or produced by an excluded company?
+     * @param array<string, mixed> $d TMDB details payload
+     * @param string $media 'movie' or 'tv'
+     * @param array{companies: list<int>, titles: array<string, true>} $exclusions from exclusions()
+     */
+    public static function isExcluded(array $d, string $media, array $exclusions): bool
+    {
+        return isset($exclusions['titles'][($media === 'tv' ? 'tv' : 'movie') . ':' . (int) ($d['id'] ?? 0)])
+            || (bool) array_intersect(self::ids($d['production_companies'] ?? []), $exclusions['companies']);
     }
 
     /**
