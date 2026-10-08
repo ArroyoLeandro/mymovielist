@@ -5,7 +5,10 @@ import { api, type ListEntry, type Profile as ProfileData, type TitleSummary } f
 import { useAuth } from '../auth'
 import Poster from '../components/Poster'
 import StudioLogo from '../components/StudioLogo'
+import { Bookmark, Eye, Inbox, Send } from 'lucide-react'
 import { ProfileSkeleton } from '../components/Skeleton'
+import { EmptyState, ErrorState } from '../components/States'
+import Tabs, { type TabItem } from '../components/Tabs'
 import { DYNAMIC_KEYS, useProfile } from '../queries'
 
 type Sort = 'score' | 'title' | 'year' | 'recent'
@@ -44,8 +47,8 @@ function TitleRow({ m, aside, children }: { m: TitleSummary; aside?: ReactNode; 
 export default function Profile() {
   const { tag = '' } = useParams()
   const { user } = useAuth()
-  const { data, error } = useProfile(tag)
-  if (error && !data) return <p className="error">{error.message}</p>
+  const { data, error, refetch } = useProfile(tag)
+  if (error && !data) return <ErrorState error={error} onRetry={() => void refetch()} />
   if (!data) return <ProfileSkeleton />
   // Remount per profile: filters start fresh.
   return <ProfileView key={tag} data={data} own={user?.tag.toLowerCase() === tag.toLowerCase()} />
@@ -63,13 +66,18 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
 
   const received = data.recommendedToMe ?? []
   const sent = data.myRecommendations ?? []
-  const tabs = ([
-    ['vistas', 'Vistas', data.stats.watchedCount],
-    ['pendientes', 'Pendientes', data.pending.length],
-    ...(own ? [['recomendadas', 'Recomendadas', received.length], ['mis-recomendaciones', 'Mis recomendaciones', sent.reduce((n, g) => n + g.items.length, 0)]] : []),
-  ] as [Tab, string, number][])
+  const tabs: TabItem<Tab>[] = [
+    { id: 'vistas', label: 'Vistas', count: data.stats.watchedCount },
+    { id: 'pendientes', label: 'Pendientes', count: data.pending.length },
+    ...(own
+      ? [
+          { id: 'recomendadas' as Tab, label: 'Recomendadas', count: received.length },
+          { id: 'mis-recomendaciones' as Tab, label: 'Mis recomendaciones', count: sent.reduce((n, g) => n + g.items.length, 0) },
+        ]
+      : []),
+  ]
   const picked = params.get('tab')
-  const tab = tabs.find((t) => t[0] === picked)?.[0] ?? 'vistas'
+  const tab = tabs.find((t) => t.id === picked)?.id ?? 'vistas'
   const setTab = (t: Tab) => {
     const next = new URLSearchParams(params)
     if (t === 'vistas') next.delete('tab')
@@ -114,7 +122,10 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
 
   return (
     <>
-      <h1 className="title">{data.user.tag}<span className="muted-title"> · {own ? 'mi perfil' : 'lista de películas'}</span></h1>
+      <header className="page-head">
+        <h1 className="title">{data.user.tag}</h1>
+        <p className="lead">{own ? 'Tu perfil: lo que viste, lo que tienes pendiente y lo que te recomendaron.' : 'Lo que vio y lo que tiene pendiente.'}</p>
+      </header>
       <section className="stats">
         <div className="stat"><b>{stats.watchedCount}<small>/{stats.totalMovies}</small></b><span>vistas &middot; {pct}%</span></div>
         <div className="stat"><b>{stats.averageScore !== null ? stats.averageScore.toFixed(1) : '–'}</b><span>puntaje promedio</span></div>
@@ -139,47 +150,41 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
         )}
       </section>
 
-      <div className="seg tabs profile-tabs" role="tablist" aria-label="Secciones del perfil">
-        {tabs.map(([key, label, n]) => (
-          <button key={key} role="tab" aria-selected={tab === key} className={tab === key ? 'on' : ''} onClick={() => setTab(key)}>
-            {label} <small>{n}</small>
-          </button>
-        ))}
-      </div>
-      {failed && <p className="error small">No se pudo completar la acción. Inténtalo de nuevo.</p>}
+      <Tabs label="Secciones del perfil" items={tabs} value={tab} onChange={setTab} className="profile-tabs" />
+      {failed && <p className="error small" role="alert">No se pudo completar la acción. Inténtalo de nuevo.</p>}
 
       {tab === 'vistas' && (
         stats.watchedCount === 0 ? (
-          <p className="muted tab-empty">Todavía no ha visto nada.</p>
+          <EmptyState icon={Eye} title={own ? 'Todavía no marcaste nada como visto' : `@${data.user.tag} todavía no marcó nada como visto`}>
+            {own && <>Entra a un estudio y toca <b>+</b> en los títulos que ya viste.</>}
+          </EmptyState>
         ) : (
           <>
-            <div className="chips-bar profile-filters">
-              <div className="chips-wrap">
-                <nav className="chips" aria-label="Estudios">
-                  <button className={studio === 'all' ? 'on' : ''} onClick={() => setStudio('all')}>Todos <small>{stats.watchedCount}</small></button>
-                  {stats.byStudio.map((s) => (
-                    <button key={s.slug} className={studio === s.slug ? 'on' : ''} onClick={() => setStudio(s.slug)}>
-                      {s.name} <small>{s.watched}</small>
-                    </button>
-                  ))}
-                </nav>
+            <div className="profile-filters">
+              <div className="chip-list" role="group" aria-label="Filtrar por estudio">
+                <button type="button" className={`chip ${studio === 'all' ? 'on' : ''}`} aria-pressed={studio === 'all'} onClick={() => setStudio('all')}>Todos <small>{stats.watchedCount}</small></button>
+                {stats.byStudio.map((s) => (
+                  <button key={s.slug} type="button" className={`chip ${studio === s.slug ? 'on' : ''}`} aria-pressed={studio === s.slug} onClick={() => setStudio(s.slug)}>
+                    {s.name} <small>{s.watched}</small>
+                  </button>
+                ))}
+              </div>
+              <div className="filters">
+                <select value={kind} onChange={(e) => setKind(e.target.value as Kind)} aria-label="Tipo">
+                  <option value="all">Películas y series</option>
+                  <option value="movie">Películas</option>
+                  <option value="series">Series</option>
+                </select>
+                <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="Ordenar por">
+                  <option value="score">Por puntaje</option>
+                  <option value="title">Por título</option>
+                  <option value="year">Por año</option>
+                  <option value="recent">Vistos recientemente</option>
+                </select>
               </div>
             </div>
-            <div className="filter-row">
-              <select value={kind} onChange={(e) => setKind(e.target.value as Kind)} aria-label="Tipo">
-                <option value="all">Todo</option>
-                <option value="movie">Películas</option>
-                <option value="series">Series</option>
-              </select>
-              <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="Ordenar por">
-                <option value="score">Puntaje</option>
-                <option value="title">Título</option>
-                <option value="year">Año</option>
-                <option value="recent">Vistos recientemente</option>
-              </select>
-            </div>
 
-            {groups.length === 0 && <p className="muted">No hay títulos con esos filtros.</p>}
+            {groups.length === 0 && <p className="muted">No hay títulos con estos filtros.</p>}
             {studio !== 'all' ? (
               <ul className="list">
                 {groups.flatMap((g) => g.items).map((e) => (
@@ -192,11 +197,11 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
                 return (
                   <section key={s.slug} className="era">
                     <h2>
-                      <button className="era-toggle studio-head" aria-expanded={open} onClick={() => toggle(s.slug)}>
+                      <button type="button" className="era-toggle" aria-expanded={open} onClick={() => toggle(s.slug)}>
                         <i className={`chev ${open ? 'open' : ''}`} aria-hidden="true" />
                         <StudioLogo name={s.name} url={s.logoUrl} className="mini" />
                         {s.name}
-                        <em>{s.watched} vistas{s.avgScore !== null ? ` · prom. ${s.avgScore.toFixed(1)}` : ''}</em>
+                        <em>{s.watched} {s.watched === 1 ? 'vista' : 'vistas'}{s.avgScore !== null ? ` · prom. ${s.avgScore.toFixed(1)}` : ''}</em>
                       </button>
                     </h2>
                     {open && (
@@ -216,17 +221,19 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
 
       {tab === 'pendientes' && (
         data.pending.length === 0 ? (
-          <p className="muted tab-empty">{own ? 'No tienes pendientes. Usa “Quiero verla” en cualquier título.' : 'No tiene pendientes.'}</p>
+          <EmptyState icon={Bookmark} title={own ? 'No tienes pendientes' : `@${data.user.tag} no tiene pendientes`}>
+            {own && 'Toca el marcador en cualquier título para guardarlo aquí y verlo después.'}
+          </EmptyState>
         ) : (
-          <ul className="list tab-list">
+          <ul className="list">
             {data.pending.map((m) => (
               <TitleRow
                 key={m.id}
                 m={m}
                 aside={own && (
                   <span className="row-actions">
-                    <button className="mini-btn primary-ish" disabled={busy === m.id} onClick={() => void act(m.id, () => api.saveEntry(m.id, true, null))}>La vi</button>
-                    <button className="mini-btn" disabled={busy === m.id} onClick={() => void act(m.id, () => api.setPending(m.id, false))}>Quitar</button>
+                    <button type="button" className="btn btn-primary btn-sm" disabled={busy === m.id} onClick={() => void act(m.id, () => api.saveEntry(m.id, true, null))}>La vi</button>
+                    <button type="button" className="btn btn-ghost btn-sm" disabled={busy === m.id} onClick={() => void act(m.id, () => api.setPending(m.id, false))}>Quitar</button>
                   </span>
                 )}
               >
@@ -239,9 +246,11 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
 
       {tab === 'recomendadas' && own && (
         received.length === 0 ? (
-          <p className="muted tab-empty">Nadie te ha recomendado nada todavía.</p>
+          <EmptyState icon={Inbox} title="Todavía nadie te recomendó nada">
+            Cuando alguien del grupo te recomiende un título, va a aparecer aquí.
+          </EmptyState>
         ) : (
-          <ul className="list tab-list">
+          <ul className="list">
             {received.map((r) => (
               <TitleRow
                 key={r.id}
@@ -255,9 +264,9 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
                         {r.pending ? (
                           <span className="tag">En pendientes</span>
                         ) : (
-                          <button className="mini-btn" disabled={busy === r.id} onClick={() => void act(r.id, () => api.setPending(r.movie.id, true))}>Quiero verla</button>
+                          <button type="button" className="btn btn-ghost btn-sm" disabled={busy === r.id} onClick={() => void act(r.id, () => api.setPending(r.movie.id, true))}>Quiero verla</button>
                         )}
-                        <button className="mini-btn primary-ish" disabled={busy === r.id} onClick={() => void act(r.id, () => api.saveEntry(r.movie.id, true, null))}>La vi</button>
+                        <button type="button" className="btn btn-primary btn-sm" disabled={busy === r.id} onClick={() => void act(r.id, () => api.saveEntry(r.movie.id, true, null))}>La vi</button>
                       </>
                     )}
                   </span>
@@ -273,7 +282,9 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
 
       {tab === 'mis-recomendaciones' && own && (
         sent.length === 0 ? (
-          <p className="muted tab-empty">Todavía no has recomendado nada. Usa “Recomendar…” en cualquier título.</p>
+          <EmptyState icon={Send} title="Todavía no recomendaste nada">
+            Toca el avión de papel en cualquier título para recomendárselo a alguien del grupo.
+          </EmptyState>
         ) : (
           sent.map((g) => {
             const seen = g.items.filter((i) => i.watched).length
@@ -292,7 +303,7 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
                           ) : (
                             <span className="tag">Pendiente</span>
                           )}
-                          <button className="mini-btn" disabled={busy === i.id} onClick={() => void act(i.id, () => api.deleteRecommendation(i.id))} aria-label={`Eliminar la recomendación de ${i.movie.title} a @${g.toTag}`}>Eliminar</button>
+                          <button type="button" className="btn btn-ghost btn-sm" disabled={busy === i.id} onClick={() => void act(i.id, () => api.deleteRecommendation(i.id))} aria-label={`Eliminar la recomendación de ${i.movie.title} a @${g.toTag}`}>Eliminar</button>
                         </span>
                       }
                     >
