@@ -71,6 +71,8 @@ Rework the profile page (`/u/:tag`, own and other users) so it reads clearly at 
 - 2026-10-08: P6 done in 4eb9788 (delegated writer). Tied maxima: every tied bar stays full gold (equal height and color say "same count"; dimming one would suggest a difference) and only the highest tied score carries the count label. Evidence: `npm run build` passes; no real user has a tied maximum, so the profile response was rewritten in the browser via CDP (no DB writes): ties at 6/8 and at 1/10 render 2 gold bars and one label (8, resp. 10), no element outside the panel at 360/1280.
 - Screenshots (scratchpad `shots/`): `final-*`, `final-pend-*`, `final-reco-*`, `final-mis-*`, `p5all-*` (expanded), `p5sk-*` (skeleton), `p6tie*`. All local servers (php -S, vite) stopped after the checks.
 
+- 2026-10-08: P4-P6 slice 94074ea..5ce6e85: RDD assess medium, `under_budget` (not reviewed; stays pending in the slice budget). Parent spot check: `npm run build` re-run passes; final-Kanji1 1280/360 screenshots viewed (flat grid, two-column band at 1280, stacked on phone); no vite/php dev server left running.
+
 ## Next step
 
-- Native review of the P4-P6 slice (e15cf15..4eb9788) if due; push and deploy are the user's decision.
+- Merge, push and deploy of P4-P6 (user decision).
