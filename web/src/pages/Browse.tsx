@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import type { RatingRow, StateTitle, Studio, TitleFilters } from '../api'
 import { useAuth } from '../auth'
 import LiveCard from '../components/LiveCard'
-import { SearchX, X } from 'lucide-react'
+import { LoaderCircle, SearchX, X } from 'lucide-react'
 import { GridSkeleton } from '../components/Skeleton'
 import { EmptyState, ErrorState } from '../components/States'
 import ProviderPicker, { type PickerOption } from '../components/ProviderPicker'
@@ -225,6 +225,11 @@ export default function Browse() {
       </StickyBar>
 
       <div className={`results ${switching ? 'is-switching' : ''}`} ref={results} aria-busy={switching || undefined}>
+        {switching && (
+          <div className="results-loading" role="status">
+            <span><LoaderCircle size={16} className="spin" aria-hidden="true" />Cargando…</span>
+          </div>
+        )}
         {list.error && !list.data ? (
           <ErrorState error={list.error} onRetry={() => void list.refetch()} />
         ) : !list.data ? (

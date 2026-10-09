@@ -510,9 +510,18 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
   .bar-name span:last-child { color: var(--muted); font-family: var(--body); font-size: var(--fs-meta); font-weight: 500; }
 }
 .filters { display: flex; flex-wrap: wrap; gap: var(--s2); }
-.results { margin-top: var(--s3); scroll-margin-top: var(--anchor-offset); transition: opacity var(--fast); }
-/* A new filter is loading: the previous grid stays, dimmed and inert, instead of collapsing to a skeleton. */
-.results.is-switching { opacity: 0.5; pointer-events: none; }
+.results { margin-top: var(--s3); scroll-margin-top: var(--anchor-offset); }
+.results > * { transition: opacity var(--fast); }
+/* A new filter is loading: the previous grid stays, dimmed and inert, instead of collapsing to a skeleton.
+   The loading pill is not dimmed, so it is the one clear thing on screen. */
+.results.is-switching > :not(.results-loading) { opacity: 0.5; pointer-events: none; }
+/* Zero-height sticky row: the pill floats over the dimmed grid, under the sticky bar, without shifting the cards. */
+.results-loading { position: sticky; top: calc(var(--anchor-offset) + var(--s3)); z-index: 2; display: flex; justify-content: center; height: 0; pointer-events: none; }
+.results-loading > span {
+  display: inline-flex; align-items: center; gap: var(--s2); height: 40px; margin-top: var(--s5); padding: 0 var(--s4);
+  border: 1px solid var(--line-strong); border-radius: var(--r-pill); background: var(--panel-2); box-shadow: var(--shadow-pop);
+  font-size: 0.9rem; font-weight: 600; animation: fade var(--fast) both;
+}
 .chip-q { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border: 1px solid var(--gold); border-radius: var(--r-pill); background: var(--panel-2); font-size: 0.85rem; }
 .chip-q:hover { background: var(--raised); }
 /* Phones and narrow tablets: search on its own row, every other control on one swipeable line
