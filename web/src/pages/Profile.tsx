@@ -36,7 +36,7 @@ const SORTS: Record<Sort, (a: ListEntry, b: ListEntry) => number> = {
 /** How long the "Deshacer" action stays available after dismissing a recommendation. */
 const UNDO_MS = 5000
 /** Studio progress rows shown before "Ver todos". */
-const STUDIOS_SHOWN = 6
+const STUDIOS_SHOWN = 5
 /** Cards per chunk of a long flat grid: a multiple of every column count the grid uses (2 to 6), so rows stay full. */
 const CHUNK = 60
 
@@ -141,28 +141,28 @@ function StudioSelect({ titles, value, names, onChange }: {
 type StudioStat = ProfileData['stats']['byStudio'][number]
 
 /**
- * Progress per studio, which doubles as the "Vistas" studio filter: picking a row filters the list, picking it again
- * clears it. Full names wrap (never truncated); the top rows show first, the rest behind "Ver todos".
+ * Progress per studio, secondary to the overview: dense rows (name, watched/total, percent, a thin bar) beside it.
+ * Each row is also the studio filter: picking it filters "Vistas", picking it again clears it. Full names wrap (never
+ * truncated); the top rows show first, the rest behind "Ver todos" in a list that scrolls inside the column.
  */
 function StudioProgress({ studios, value, onPick }: { studios: StudioStat[]; value: string; onPick: (slug: string) => void }) {
   const [all, setAll] = useState(false)
   // Collapsed, a picked studio from the tail stays visible so the pressed row never disappears.
   const shown = all ? studios : studios.filter((s, i) => i < STUDIOS_SHOWN || s.slug === value)
   return (
-    <section className="studio-progress" aria-labelledby="sp-title">
+    <section className="p-studios" aria-labelledby="sp-title">
       <div className="sp-head">
         <h2 id="sp-title">Progreso por estudio</h2>
         {value !== 'all' && <button type="button" className="btn btn-quiet btn-sm" onClick={() => onPick('all')}>Todos</button>}
       </div>
-      <p className="sp-hint">Toca un estudio para ver solo esas vistas.</p>
-      <ul className="sp-list">
+      <ul className={`sp-list ${all ? 'is-all' : ''}`}>
         {shown.map((s) => (
           <li key={s.slug}>
             <button
               type="button"
               className="sp-row"
               aria-pressed={value === s.slug}
-              aria-label={`${s.name}: ${s.watched} de ${s.total} vistas, ${percent(s.watched, s.total)}`}
+              aria-label={`${s.name}: ${s.watched} de ${s.total} vistas, ${percent(s.watched, s.total)}. Ver solo este estudio`}
               onClick={() => onPick(value === s.slug ? 'all' : s.slug)}
             >
               <span className="sp-name">{s.name}</span>
@@ -173,7 +173,7 @@ function StudioProgress({ studios, value, onPick }: { studios: StudioStat[]; val
         ))}
       </ul>
       {studios.length > STUDIOS_SHOWN && (
-        <button type="button" className="btn btn-ghost btn-sm sp-more" aria-expanded={all} onClick={() => setAll((a) => !a)}>
+        <button type="button" className="btn btn-quiet btn-sm sp-more" aria-expanded={all} onClick={() => setAll((a) => !a)}>
           {all ? 'Ver menos' : `Ver todos (${studios.length})`}
         </button>
       )}
@@ -385,22 +385,24 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
           <p className="lead">{own ? 'Tu perfil: lo que viste, lo que tienes pendiente y lo que te recomendaron.' : 'Lo que vio y lo que tiene pendiente.'}</p>
         </div>
       </header>
-      <section className="overview" aria-label="Resumen">
-        <div className="ov-summary">
-          <div className="ov-figure">
-            <b>{stats.watchedCount}<small>/{stats.totalMovies}</small></b>
-            <span>vistas</span>
-            <span className="ov-meter" aria-hidden="true"><i style={{ width: `${pct}%` }} /></span>
-            <span className="ov-pct">{percent(stats.watchedCount, stats.totalMovies)} del catálogo</span>
+      <div className={`ov-band ${stats.byStudio.length > 0 ? 'has-studios' : ''}`}>
+        <section className="overview" aria-label="Resumen">
+          <div className="ov-summary">
+            <div className="ov-figure">
+              <b>{stats.watchedCount}<small>/{stats.totalMovies}</small></b>
+              <span>vistas</span>
+              <span className="ov-meter" aria-hidden="true"><i style={{ width: `${pct}%` }} /></span>
+              <span className="ov-pct">{percent(stats.watchedCount, stats.totalMovies)} del catálogo</span>
+            </div>
+            <div className="ov-figure">
+              <b>{stats.averageScore !== null ? stats.averageScore.toFixed(1) : '–'}</b>
+              <span>puntaje promedio</span>
+            </div>
           </div>
-          <div className="ov-figure">
-            <b>{stats.averageScore !== null ? stats.averageScore.toFixed(1) : '–'}</b>
-            <span>puntaje promedio</span>
-          </div>
-        </div>
-        <ScoreChart counts={dist} average={stats.averageScore} />
-      </section>
-      {stats.byStudio.length > 0 && <StudioProgress studios={stats.byStudio} value={studio} onPick={pickStudio} />}
+          <ScoreChart counts={dist} average={stats.averageScore} />
+        </section>
+        {stats.byStudio.length > 0 && <StudioProgress studios={stats.byStudio} value={studio} onPick={pickStudio} />}
+      </div>
 
       <div ref={listTop} className="profile-anchor" />
       <Tabs label="Secciones del perfil" items={tabs} value={tab} onChange={setTab} className="profile-tabs" />

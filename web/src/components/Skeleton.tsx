@@ -110,8 +110,10 @@ export function ProfileSkeleton() {
           <Sk className="sk-line" style={{ width: 'min(360px, 90%)', marginTop: 12 }} />
         </div>
       </div>
-      <Sk className="sk-overview" />
-      <Sk className="sk-panel" />
+      <div className="sk-band" aria-hidden="true">
+        <Sk className="sk-ov" />
+        <Sk className="sk-sp" />
+      </div>
       <Sk className="sk-seg" />
       <Sk className="sk-h2" style={{ marginTop: 40 }} />
       <SkGrid cards={10} />

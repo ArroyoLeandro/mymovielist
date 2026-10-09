@@ -543,11 +543,12 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
 .profile-av { --av: 64px; }
 .profile-who { min-width: 0; }
 
-/* Overview: watched count and average on the left, the score chart on the right (stacked on phones). */
-.overview, .studio-progress { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+/* Overview band: one panel. The overview (counts + score chart) takes the wide column and studio progress, secondary,
+   the narrow one beside it; below 960px studio progress moves under the overview, still in the same panel. */
+.ov-band { display: grid; margin: var(--s5) 0; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+@media (min-width: 960px) { .ov-band.has-studios { grid-template-columns: minmax(0, 1fr) minmax(260px, 340px); } }
 .overview {
-  display: grid; grid-template-columns: minmax(200px, 250px) minmax(0, 1fr); gap: var(--s5);
-  margin: var(--s5) 0 var(--s4); padding: 20px 22px;
+  display: grid; grid-template-columns: minmax(180px, 230px) minmax(0, 1fr); gap: var(--s5); min-width: 0; padding: 20px 22px;
 }
 .ov-summary { display: grid; align-content: center; gap: var(--s5); padding-right: var(--s5); border-right: 1px solid var(--line); }
 .ov-figure { display: grid; gap: 2px; min-width: 0; }
@@ -558,27 +559,31 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
 .ov-meter i { display: block; height: 100%; border-radius: inherit; background: var(--gold); }
 .ov-figure > .ov-pct { color: var(--text); font-size: var(--fs-meta); }
 
-/* Studio progress, also the "Vistas" studio filter: each row is a toggle button; names wrap, never truncate. */
-.studio-progress { margin-bottom: var(--s5); padding: var(--s4) 22px; }
-.sp-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); min-height: 30px; }
-.sp-head h2 { font-size: 1.05rem; font-weight: 700; }
-.sp-hint { margin: 2px 0 var(--s3); color: var(--muted); font-size: var(--fs-meta); }
-.sp-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: 2px var(--s4); margin: 0; padding: 0; list-style: none; }
+/* Studio progress (also the studio filter): dense toggle rows, small type, a 3px bar; the heading reads like the chart's
+   "Puntajes" caption. Expanded, the list scrolls inside the column (cut mid-row, so more rows read as scrollable)
+   instead of stretching the band. */
+.p-studios { display: flex; flex-direction: column; min-width: 0; padding: var(--s3) var(--s3) var(--s2); border-top: 1px solid var(--line); }
+@media (min-width: 960px) { .p-studios { padding-top: 14px; border-top: 0; border-left: 1px solid var(--line); } }
+.sp-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); min-height: 28px; padding-left: 7px; }
+.sp-head h2 { color: var(--muted); font-family: var(--body); font-size: 0.85rem; font-weight: 500; }
+.sp-list { display: grid; align-content: start; gap: 1px; margin: 0; padding: 0; list-style: none; }
+.sp-list.is-all { max-height: 206px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
 .sp-row {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 6px var(--s3);
-  width: 100%; padding: 10px 12px; border: 1px solid transparent; border-radius: var(--r-md);
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 4px var(--s2);
+  width: 100%; padding: 5px 6px 6px; border: 1px solid transparent; border-radius: var(--r-sm); text-align: left;
   transition: background-color var(--fast), border-color var(--fast);
 }
 .sp-row:hover { background: var(--panel-2); }
+.sp-row:focus-visible { outline-offset: -2px; } /* inside a scrolling list: an outer ring would be clipped */
 .sp-row[aria-pressed='true'] { border-color: var(--gold); background: var(--panel-2); }
-.sp-name { font-size: 0.92rem; font-weight: 600; overflow-wrap: anywhere; }
-.sp-n { color: var(--muted); font-size: var(--fs-meta); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sp-name { font-size: var(--fs-meta); font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+.sp-n { color: var(--muted); font-size: var(--fs-xs); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .sp-n b { color: var(--text); font-weight: 600; }
-.sp-n em { display: inline-block; min-width: 3.2em; color: var(--text); font-style: normal; text-align: right; }
-.sp-track { grid-column: 1 / -1; height: 6px; overflow: hidden; border-radius: var(--r-pill); background: var(--panel-2); }
+.sp-n em { display: inline-block; min-width: 2.9em; color: var(--text); font-style: normal; text-align: right; }
+.sp-track { grid-column: 1 / -1; height: 3px; overflow: hidden; border-radius: var(--r-pill); background: var(--panel-2); }
 .sp-row:hover .sp-track, .sp-row[aria-pressed='true'] .sp-track { background: var(--raised); }
 .sp-track i { display: block; height: 100%; border-radius: inherit; background: var(--gold); }
-.sp-more { margin-top: var(--s3); }
+.sp-more { align-self: flex-start; margin-top: 2px; }
 .profile-anchor { scroll-margin-top: var(--anchor-offset); }
 
 /* Score chart (components/ScoreChart): one hue, columns in a plot of definite height (--sc-h). The top padding is the
@@ -679,8 +684,6 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
   .ov-summary { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s4); padding: 0 0 var(--s4); border-right: 0; border-bottom: 1px solid var(--line); }
   .ov-figure b { font-size: 2rem; }
   .ov-figure b small { font-size: 0.95rem; }
-  .studio-progress { padding: var(--s4); }
-  .sp-row { padding-inline: var(--s2); }
 }
 @media (max-width: 599.98px) {
   .profile-av { --av: 52px; }
@@ -738,9 +741,13 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
 .sk-meter { height: 8px; margin-top: 14px; border-radius: var(--r-pill); }
 .sk-search { flex: 0 1 300px; height: 38px; margin-left: auto; border-radius: var(--r-pill); }
 .sk-seg { height: 40px; width: 260px; border-radius: var(--r-pill); }
-.sk-overview { height: 222px; margin: var(--s5) 0 var(--s4); border-radius: var(--radius); }
-.sk-panel { height: 200px; margin-bottom: var(--s5); border-radius: var(--radius); }
-@media (max-width: 719.98px) { .sk-overview { height: 340px; } }
+/* Same band as the overview: one rounded panel, studio progress beside it (under it below 960px). */
+.sk-band { display: grid; gap: 1px; margin: var(--s5) 0; overflow: hidden; border-radius: var(--radius); }
+.sk-band > .sk { border-radius: 0; }
+.sk-ov { height: 234px; }
+.sk-sp { height: 210px; }
+@media (min-width: 960px) { .sk-band { grid-template-columns: minmax(0, 1fr) minmax(260px, 340px); } .sk-sp { height: auto; } }
+@media (max-width: 719.98px) { .sk-ov { height: 340px; } }
 .sk-brand { height: 28px; width: 140px; }
 .sk-pill { height: 34px; width: 84px; border-radius: var(--r-pill); }
 .sk-logo { height: 96px; border-radius: var(--r-md); }
