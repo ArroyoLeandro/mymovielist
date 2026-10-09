@@ -338,8 +338,11 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
   font-size: var(--fs-xs); font-weight: 500; line-height: 1.25; text-align: center;
   opacity: 0; visibility: hidden; pointer-events: none; transition: opacity var(--fast);
 }
-.act[data-tip]:first-child::after { left: 0; translate: none; text-align: left; }
-.act[data-tip]:last-child::after { left: auto; right: 0; translate: none; text-align: right; }
+/* The cluster sits at the poster's right edge and .art clips overflow, so every tooltip lines up with the cluster's
+   right edge (shifted by the buttons after it) and grows left, over the poster. */
+.art-actions .act[data-tip]::after { left: auto; right: 0; translate: none; text-align: right; }
+.art-actions .act[data-tip]:nth-last-child(2)::after { right: calc(-1 * (var(--act) + var(--act-gap))); }
+.art-actions .act[data-tip]:nth-last-child(3)::after { right: calc(-2 * (var(--act) + var(--act-gap))); }
 .act:focus-visible[data-tip]::after { opacity: 1; visibility: visible; }
 @media (hover: hover) { .act:hover[data-tip]::after { opacity: 1; visibility: visible; } }
 
