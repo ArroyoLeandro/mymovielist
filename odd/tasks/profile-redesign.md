@@ -75,6 +75,8 @@ Rework the profile page (`/u/:tag`, own and other users) so it reads clearly at 
 
 - 2026-10-08: P4-P6 delivered (user authorized). `main` fast-forwarded and pushed. Prod: frontend only (no `api/` changes); bundle index-Bah5x6dE.js / index-BCx8u83n.css over TUS, then index.html; previous bundle (index-DAf3BW-x.js / index-CA4hmEi9.css) deleted. Check: site serves the new bundle names, JS contains "Todos los estudios", CSS 200.
 
+- 2026-10-08: Regression fix e789bc7 (route inline: one CSS rule). User reported the profile grid overflowing the page. Cause: `.p-chunks > .era-body { contain-intrinsic-size: auto 5200px }` set the placeholder size on both axes, so skipped chunks counted as 5200px wide and the `auto` column of the `.p-chunks` grid grew to 5200px (21 card columns) at every viewport width. Earlier screenshots missed it because the screenshot script forced `content-visibility: visible`. Fix: `grid-template-columns: minmax(0, 1fr)` and a block-size-only estimate (`contain-intrinsic-block-size`). Evidence (headless Chrome, no forcing): before 5200px track / 21 columns at 1875 and 1280; after 1200px / 5 columns at 1875, 1440, 1280; 960 at 1000; 760 at 800; 560/2 at 600; 358 at 390; 288/2 at 320; scrollWidth == innerWidth everywhere; viewport screenshot at 1875. Deployed: bundle index-Bs0ShyhD.js / index-BefaTJOR.css, then index.html; previous bundle deleted; served CSS contains the fix. Lesson: screenshot checks must not force rendering of skipped content; measure computed grid tracks.
+
 ## Next step
 
 - User feedback on phones/tablets (600-960px not checked).
