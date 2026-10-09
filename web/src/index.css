@@ -594,7 +594,7 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
   position: relative; display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 2px;
   height: var(--sc-h); padding-top: 18px; border-bottom: 1px solid var(--line-strong);
 }
-.sc-col { position: relative; display: flex; min-width: 0; border-radius: 4px 4px 0 0; outline-offset: 0; cursor: default; }
+.sc-col { position: relative; display: flex; min-width: 0; border-radius: 4px 4px 0 0; outline-offset: 0; }
 .sc-track { position: relative; flex: 1; }
 .sc-bar {
   position: absolute; bottom: 0; left: 50%; translate: -50% 0; width: min(100%, 24px);
@@ -604,6 +604,13 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
 .sc-col.is-top .sc-bar { background: var(--gold); }
 .sc-bar.is-zero { height: 2px; border-radius: 0; background: var(--line-strong); }
 .sc-col:hover .sc-bar:not(.is-zero), .sc-col:focus-visible .sc-bar:not(.is-zero) { background: var(--gold-hover); }
+/* A picked score (the Vistas score filter): its bar is the only full-gold one and its axis number a gold pill; the rest
+   dim. No column wash: on narrow columns a full-height wash would read as a bar. */
+.score-chart { --sc-faint: color-mix(in oklab, var(--gold) 22%, var(--panel)); }
+.sc-plot.has-pick .sc-bar:not(.is-zero) { background: var(--sc-faint); }
+.sc-plot .sc-col[aria-pressed='true'] .sc-bar { background: var(--gold); }
+.sc-plot.has-pick .sc-col:hover .sc-bar:not(.is-zero), .sc-plot.has-pick .sc-col:focus-visible .sc-bar:not(.is-zero) { background: var(--gold-hover); }
+.sc-axis span.is-pick { justify-self: center; min-width: 24px; padding: 0 5px; border-radius: var(--r-pill); line-height: 1.4; background: var(--gold); color: var(--gold-ink); font-weight: 800; }
 .sc-val {
   position: absolute; bottom: 100%; left: 50%; translate: -50% 0; padding-bottom: 2px;
   color: var(--text); font-size: var(--fs-xs); font-style: normal; font-weight: 700; line-height: 1.2; white-space: nowrap; font-variant-numeric: tabular-nums;
@@ -636,10 +643,10 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
 .profile-filters .filters { flex-wrap: wrap; }
 /* Option text sets a select's width: a long studio name shrinks the control (ellipsis) instead of widening the page. */
 .profile-filters select { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Phones: the studio select gets its own row; type and sort share the next one. */
+/* Phones: the studio select gets its own row; the others two per row (Vistas: type and score, then sort). */
 @media (max-width: 599.98px) {
   .profile-filters .p-studio { flex: 1 1 100%; }
-  .profile-filters select:not(.p-studio) { flex: 1 1 0; padding: 0 28px 0 12px; background-position: right 10px center; }
+  .profile-filters select:not(.p-studio) { flex: 1 1 calc(50% - var(--s2)); padding: 0 28px 0 12px; background-position: right 10px center; }
 }
 
 .thumb { width: 52px; border-radius: var(--r-sm); font-size: 1.2rem; }

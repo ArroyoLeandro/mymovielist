@@ -20,6 +20,9 @@ import { useProfile } from '../queries'
 
 type Sort = 'score' | 'title' | 'year' | 'recent'
 type Kind = 'all' | 'movie' | 'series'
+/** Vistas score filter: every score, an exact score 1..10, or the titles without a score. */
+type ScorePick = 'all' | 'none' | number
+const scoreMatches = (pick: ScorePick, s: number | null) => pick === 'all' || (pick === 'none' ? s === null : s === pick)
 type Tab = 'vistas' | 'pendientes' | 'recomendadas' | 'mis-recomendaciones'
 /** What an action did to a row in this visit: the row stays in place, marked, until the next visit. */
 type Done = 'watched' | 'removed' | 'deleted'
@@ -138,6 +141,34 @@ function StudioSelect({ titles, value, names, onChange }: {
   )
 }
 
+/**
+ * Score filter for "Vistas": "Todos los puntajes", each exact score 10..1 with its count among `entries` (the watched
+ * titles after the studio and type filters) and "Sin puntaje" when any watched title has no score. Scores with nothing
+ * under the current filters stay listed with (0), so changing another filter never silently drops this one.
+ */
+function ScoreSelect({ entries, value, hasUnscored, onChange }: {
+  entries: ListEntry[]; value: ScorePick; hasUnscored: boolean; onChange: (v: ScorePick) => void
+}) {
+  const counts = useMemo(() => {
+    const c = new Map<number | null, number>()
+    for (const e of entries) c.set(e.score, (c.get(e.score) ?? 0) + 1)
+    return c
+  }, [entries])
+  const scores = Array.from({ length: 10 }, (_, i) => 10 - i)
+  return (
+    <select
+      className="p-score"
+      value={String(value)}
+      onChange={(e) => onChange(e.target.value === 'all' || e.target.value === 'none' ? e.target.value : Number(e.target.value))}
+      aria-label="Puntaje"
+    >
+      <option value="all">Todos los puntajes</option>
+      {scores.map((n) => <option key={n} value={n}>★ {n} ({counts.get(n) ?? 0})</option>)}
+      {(hasUnscored || value === 'none') && <option value="none">Sin puntaje ({counts.get(null) ?? 0})</option>}
+    </select>
+  )
+}
+
 type StudioStat = ProfileData['stats']['byStudio'][number]
 
 /**
@@ -196,6 +227,7 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
   const qc = useQueryClient()
   const [studio, setStudio] = useState('all')
   const [kind, setKind] = useState<Kind>('all')
+  const [score, setScore] = useState<ScorePick>('all')
   const [sort, setSort] = useState<Sort>('score')
   const listTop = useRef<HTMLDivElement>(null)
   const [busy, setBusy] = useState<RowKey | null>(null)
@@ -317,16 +349,20 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
     return names
   }, [data])
 
+  // Vistas filters are faceted: each select counts the titles that pass every other filter.
   const watchedTitles = useMemo(
-    () => data.watched.map((e) => e.movie).filter((m) => kind === 'all' || m.mediaType === kind),
-    [data.watched, kind],
+    () => data.watched.filter((e) => (kind === 'all' || e.movie.mediaType === kind) && scoreMatches(score, e.score)).map((e) => e.movie),
+    [data.watched, kind, score],
+  )
+  const watchedForScore = useMemo(
+    () => data.watched.filter((e) => (kind === 'all' || e.movie.mediaType === kind) && (studio === 'all' || e.movie.studio.slug === studio)),
+    [data.watched, kind, studio],
   )
   const watched = useMemo(
-    () => data.watched
-      .filter((e) => (kind === 'all' || e.movie.mediaType === kind) && (studio === 'all' || e.movie.studio.slug === studio))
-      .sort(SORTS[sort]),
-    [data.watched, kind, studio, sort],
+    () => watchedForScore.filter((e) => scoreMatches(score, e.score)).sort(SORTS[sort]),
+    [watchedForScore, score, sort],
   )
+  const hasUnscored = useMemo(() => data.watched.some((e) => e.score === null), [data.watched])
   const pendingTitles = data.pending.filter(ofKind)
   const pending = pendingTitles.filter(inStudio)
   const receivedTitles = received.map((g) => g.movie).filter(ofKind)
@@ -347,6 +383,7 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
           <option value="movie">Películas</option>
           <option value="series">Series</option>
         </select>
+        {sortable && <ScoreSelect entries={watchedForScore} value={score} hasUnscored={hasUnscored} onChange={setScore} />}
         {sortable && (
           <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="Ordenar por">
             <option value="score">Por puntaje</option>
@@ -362,16 +399,24 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
 
   const { stats } = data
   const pct = stats.totalMovies ? Math.round((stats.watchedCount / stats.totalMovies) * 100) : 0
-  // Picking a studio filters "Vistas" and brings the list into view when it is below the fold.
-  const pickStudio = (slug: string) => {
-    setStudio(slug)
-    if (slug === 'all') return
+  // Picking a studio or a score filters "Vistas" and brings the list into view when it is below the fold.
+  const showVistas = () => {
     setTab('vistas')
     const top = listTop.current
     if (top && top.getBoundingClientRect().top > window.innerHeight * 0.6) {
       const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
       top.scrollIntoView({ block: 'start', behavior: smooth ? 'smooth' : 'auto' })
     }
+  }
+  const pickStudio = (slug: string) => {
+    setStudio(slug)
+    if (slug !== 'all') showVistas()
+  }
+  // A chart bar toggles its score: picking the selected one again clears the filter.
+  const pickScore = (n: number) => {
+    if (score === n) return setScore('all')
+    setScore(n)
+    showVistas()
   }
   const scoreLabel = own ? 'Tu puntaje' : `Puntaje de @${data.user.tag}`
   const dist = Array.from({ length: 10 }, (_, i) => stats.scoreDistribution[String(i + 1)] ?? 0)
@@ -399,7 +444,7 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
               <span>puntaje promedio</span>
             </div>
           </div>
-          <ScoreChart counts={dist} average={stats.averageScore} />
+          <ScoreChart counts={dist} average={stats.averageScore} selected={typeof score === 'number' ? score : null} onPick={pickScore} />
         </section>
         {stats.byStudio.length > 0 && <StudioProgress studios={stats.byStudio} value={studio} onPick={pickStudio} />}
       </div>
