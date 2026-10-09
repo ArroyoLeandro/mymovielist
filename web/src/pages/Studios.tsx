@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import StudioLogo from '../components/StudioLogo'
+import { studioPath } from '../lib/paths'
 import { StudiosSkeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/States'
 import { useProgress, useStudios } from '../queries'
@@ -24,7 +25,7 @@ export default function Studios() {
           const seen = watched.get(s.slug) ?? 0
           const pct = s.movieCount ? Math.round((seen / s.movieCount) * 100) : 0
           return (
-            <Link key={s.slug} to={`/studio/${s.slug}`} className="studio-card">
+            <Link key={s.slug} to={studioPath(s.slug)} className="studio-card">
               <StudioLogo name={s.name} url={s.logoUrl} />
               <h2>{s.name}</h2>
               <p className="muted">{s.movieCount} {s.movieCount === 1 ? 'título' : 'títulos'}</p>

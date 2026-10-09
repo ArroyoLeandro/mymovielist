@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowUp } from 'lucide-react'
 import { useLocation, useNavigate, useNavigationType } from 'react-router-dom'
 import { scrollBehavior } from '../lib/motion'
+import { STUDIO_PREFIX } from '../lib/paths'
 
 /**
  * Scroll handling for a router without a data layer: new pages (PUSH/REPLACE to another path) start at the top,
@@ -74,7 +75,7 @@ export function BackButton() {
   const { pathname } = useLocation()
   if (pathname === '/') return null
   const inApp = ((window.history.state as { idx?: number } | null)?.idx ?? 0) > 0
-  const parent = pathname.startsWith('/studio/') ? '/estudios' : '/'
+  const parent = pathname.startsWith(STUDIO_PREFIX) ? '/estudios' : '/'
   return (
     <button type="button" className="btn btn-quiet btn-sm back" onClick={() => (inApp ? nav(-1) : nav(parent, { replace: true }))}>
       <ArrowLeft size={16} aria-hidden="true" /> Volver

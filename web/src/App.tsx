@@ -10,16 +10,18 @@ import Catalog from './pages/Catalog'
 import Ranking from './pages/Ranking'
 import Profile from './pages/Profile'
 import Admin from './pages/Admin'
+import { STUDIO_PREFIX, studioPath } from './lib/paths'
 import { Toaster } from './lib/toast'
 import { AppSkeleton } from './components/Skeleton'
 import SearchBox from './components/SearchBox'
 import { BackButton, ScrollManager, ToTopButton } from './components/Scroll'
 import { TitleDetailProvider } from './components/TitleDetail'
 
-// Old links (/studios/:slug) keep working.
+// Old links (/studio/:slug, /studios/:slug) keep working, with their query (?t=, ?tab=sagas&saga=) and hash.
 function LegacyStudioRedirect() {
   const { slug = '' } = useParams()
-  return <Navigate to={`/studio/${slug}`} replace />
+  const { search, hash } = useLocation()
+  return <Navigate to={`${studioPath(slug)}${search}${hash}`} replace />
 }
 
 /** Publishes the sticky header's height as --header-h (it changes across breakpoints). */
@@ -51,7 +53,7 @@ export default function App() {
           <nav className="nav-links" aria-label="Principal">
             <NavLink to="/" end>Inicio</NavLink>
             <NavLink to="/catalogo">Catálogo</NavLink>
-            <NavLink to="/estudios" className={({ isActive }) => (isActive || pathname.startsWith('/studio/') ? 'active' : '')}>Estudios</NavLink>
+            <NavLink to="/estudios" className={({ isActive }) => (isActive || pathname.startsWith(STUDIO_PREFIX) ? 'active' : '')}>Estudios</NavLink>
             <NavLink to="/ranking">Ranking</NavLink>
             <NavLink to={`/u/${user.tag}`}>Mi perfil</NavLink>
           </nav>
@@ -69,7 +71,8 @@ export default function App() {
             <Route path="/" element={<Home />} />
             <Route path="/estudios" element={<Studios />} />
             <Route path="/catalogo" element={<Browse />} />
-            <Route path="/studio/:slug" element={<Catalog />} />
+            <Route path="/estudio/:slug" element={<Catalog />} />
+            <Route path="/studio/:slug" element={<LegacyStudioRedirect />} />
             <Route path="/studios/:slug" element={<LegacyStudioRedirect />} />
             <Route path="/ranking" element={<Ranking />} />
             <Route path="/u/:tag" element={<Profile />} />

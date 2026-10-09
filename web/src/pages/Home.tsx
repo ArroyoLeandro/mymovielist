@@ -6,6 +6,7 @@ import LiveCard from '../components/LiveCard'
 import Card from '../components/Card'
 import { RowsSkeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/States'
+import { studioPath } from '../lib/paths'
 import { useHome } from '../queries'
 
 /** Items per home section: two full rows at five columns. CSS (.grid.capped) trims to whole rows on narrower screens. */
@@ -41,7 +42,7 @@ export default function Home() {
                 ? row.items.slice(0, HOME_LIMIT).map((s) => (
                     <Card
                       key={s.slug}
-                      to={`/studio/${s.studioSlug}?tab=sagas&saga=${s.slug}`}
+                      to={studioPath(s.studioSlug, { tab: 'sagas', saga: s.slug })}
                       className="saga-card"
                       title={s.name}
                       posterUrl={s.posterUrl}

@@ -1,6 +1,7 @@
 import { useCallback, useSyncExternalStore } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { api, ApiError, type ImportResult, type TmdbResult } from '../api'
+import { titleLink } from './paths'
 import { toast } from './toast'
 
 /** Per-result add state, shared by the header dropdown and the /catalogo panel (same title, same state). */
@@ -20,7 +21,6 @@ const subscribe = (l: () => void) => {
 }
 
 export const resultKey = (r: Pick<TmdbResult, 'mediaType' | 'tmdbId'>) => `${r.mediaType}:${r.tmdbId}`
-export const titleLink = (studioSlug: string, id: number) => `/studio/${studioSlug}?t=${id}`
 
 function errorMessage(e: unknown): string {
   if (e instanceof ApiError) {

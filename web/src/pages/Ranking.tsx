@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Award, Crown, Eye, Film, Star, Tv, Users, type LucideIcon } from 'lucide-react'
 import type { RankingRow } from '../api'
 import { useAuth } from '../auth'
+import { studioPath } from '../lib/paths'
 import { useRanking, useStudios } from '../queries'
 import Avatar from '../components/Avatar'
 import Highlights from '../components/Highlights'
@@ -185,7 +186,7 @@ export default function Ranking() {
         <EmptyState
           icon={Users}
           title={title}
-          action={!isGlobal && studio ? <Link to={`/studio/${studio.slug}`} className="btn btn-primary btn-sm">Ver el catálogo de {studio.name}</Link> : undefined}
+          action={!isGlobal && studio ? <Link to={studioPath(studio.slug)} className="btn btn-primary btn-sm">Ver el catálogo de {studio.name}</Link> : undefined}
         >
           El primero que marque un título como visto se queda con el primer puesto.
         </EmptyState>

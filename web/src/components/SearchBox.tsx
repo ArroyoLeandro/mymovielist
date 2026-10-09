@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Globe, Search, X } from 'lucide-react'
 import Poster from './Poster'
 import { TmdbList } from './TmdbResults'
+import { titleLink } from '../lib/paths'
 import { titleType } from '../lib/titleType'
 import { useSearch } from '../queries'
 
@@ -145,7 +146,7 @@ export default function SearchBox() {
               {!results.isFetching && list.length === 0 && <p className="muted search-note">Sin resultados para “{q}” en el catálogo.</p>}
               {settled && list.length <= FEW && tmdbRow}
               {list.map((t) => (
-                <Link key={t.id} to={`/studio/${t.studio.slug}?t=${t.id}`} className="search-item" data-nav>
+                <Link key={t.id} to={titleLink(t.studio.slug, t.id)} className="search-item" data-nav>
                   <Poster url={t.posterUrl} title={t.title} className="thumb" />
                   <span className="info">
                     <strong>{t.title}</strong>
