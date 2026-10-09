@@ -7,7 +7,6 @@ import Avatar from '../components/Avatar'
 import { ProviderStrip } from '../components/Providers'
 import Poster from '../components/Poster'
 import ScoreChart from '../components/ScoreChart'
-import StudioLogo from '../components/StudioLogo'
 import { Bookmark, Eye, Inbox, Send, X } from 'lucide-react'
 import { ProfileSkeleton } from '../components/Skeleton'
 import { EmptyState, ErrorState } from '../components/States'
@@ -38,6 +37,8 @@ const SORTS: Record<Sort, (a: ListEntry, b: ListEntry) => number> = {
 const UNDO_MS = 5000
 /** Studio progress rows shown before "Ver todos". */
 const STUDIOS_SHOWN = 6
+/** Cards per chunk of a long flat grid: a multiple of every column count the grid uses (2 to 6), so rows stay full. */
+const CHUNK = 60
 
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })
 /** Whole percent, but never "0%" for something that has started. */
@@ -93,6 +94,47 @@ function ProfileCard({ m, score, scoreLabel, meta, done = false, actions, childr
       {children}
       {actions && <div className="p-actions">{actions}</div>}
     </article>
+  )
+}
+
+/**
+ * One flat card grid. Long lists (hundreds of watched titles) are split into full-row chunks that the browser skips
+ * rendering while they are off screen; they still read as a single grid.
+ */
+function CardGrid({ children }: { children: ReactNode[] }) {
+  if (children.length <= CHUNK) return <div className="grid p-grid">{children}</div>
+  const chunks: ReactNode[][] = []
+  for (let i = 0; i < children.length; i += CHUNK) chunks.push(children.slice(i, i + CHUNK))
+  return (
+    <div className="p-chunks">
+      {chunks.map((c, i) => <div key={i} className="grid p-grid era-body">{c}</div>)}
+    </div>
+  )
+}
+
+/**
+ * Studio filter for the current tab: "Todos los estudios" plus every studio among `titles` (the tab's titles after the
+ * type filter) with its count, most titles first. A picked studio with nothing in this tab stays listed with (0), so
+ * switching tabs never silently drops the filter.
+ */
+function StudioSelect({ titles, value, names, onChange }: {
+  titles: TitleSummary[]; value: string; names: Map<string, string>; onChange: (slug: string) => void
+}) {
+  const options = useMemo(() => {
+    const counts = new Map<string, { name: string; n: number }>()
+    for (const { studio: s } of titles) {
+      const c = counts.get(s.slug)
+      if (c) c.n++
+      else counts.set(s.slug, { name: s.name, n: 1 })
+    }
+    if (value !== 'all' && !counts.has(value)) counts.set(value, { name: names.get(value) ?? value, n: 0 })
+    return [...counts].sort(([, a], [, b]) => b.n - a.n || a.name.localeCompare(b.name, 'es'))
+  }, [titles, value, names])
+  return (
+    <select className="p-studio" value={value} onChange={(e) => onChange(e.target.value)} aria-label="Estudio">
+      <option value="all">Todos los estudios ({titles.length})</option>
+      {options.map(([slug, o]) => <option key={slug} value={slug}>{o.name} ({o.n})</option>)}
+    </select>
   )
 }
 
@@ -155,7 +197,6 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
   const [studio, setStudio] = useState('all')
   const [kind, setKind] = useState<Kind>('all')
   const [sort, setSort] = useState<Sort>('score')
-  const [closed, setClosed] = useState<Set<string>>(new Set())
   const listTop = useRef<HTMLDivElement>(null)
   const [busy, setBusy] = useState<RowKey | null>(null)
   const [failed, setFailed] = useState(false)
@@ -177,7 +218,6 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
     }
     return [...byTitle.values()].map((g) => ({ ...g, ids: g.recos.map((r) => r.id), watched: g.recos[0].watched, pending: g.recos[0].pending }))
   }, [data.recommendedToMe, hidden])
-  const receivedSeen = received.filter((g) => g.watched)
   const sent = data.myRecommendations ?? []
   const tabs: TabItem<Tab>[] = [
     { id: 'vistas', label: 'Vistas', count: data.stats.watchedCount },
@@ -263,15 +303,62 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
     }
   }
 
-  const groups = useMemo(() => {
-    const list = data.watched.filter(
-      (e) => (kind === 'all' || e.movie.mediaType === kind) && (studio === 'all' || e.movie.studio.slug === studio),
-    )
-    list.sort(SORTS[sort])
-    return data.stats.byStudio
-      .map((s) => ({ s, items: list.filter((e) => e.movie.studio.slug === s.slug) }))
-      .filter((g) => g.items.length > 0)
-  }, [data, studio, kind, sort])
+  // Studio and type filters are shared by every tab. Each tab's studio select counts its own titles of the picked type.
+  const ofKind = (m: TitleSummary) => kind === 'all' || m.mediaType === kind
+  const inStudio = (m: TitleSummary) => studio === 'all' || m.studio.slug === studio
+  // Studio names from every list, so a picked studio keeps its name in a tab that has none of its titles.
+  const studioNames = useMemo(() => {
+    const names = new Map(data.stats.byStudio.map((s) => [s.slug, s.name]))
+    const add = (m: TitleSummary) => names.set(m.studio.slug, m.studio.name)
+    data.watched.forEach((e) => add(e.movie))
+    data.pending.forEach(add)
+    data.recommendedToMe?.forEach((r) => add(r.movie))
+    data.myRecommendations?.forEach((g) => g.items.forEach((i) => add(i.movie)))
+    return names
+  }, [data])
+
+  const watchedTitles = useMemo(
+    () => data.watched.map((e) => e.movie).filter((m) => kind === 'all' || m.mediaType === kind),
+    [data.watched, kind],
+  )
+  const watched = useMemo(
+    () => data.watched
+      .filter((e) => (kind === 'all' || e.movie.mediaType === kind) && (studio === 'all' || e.movie.studio.slug === studio))
+      .sort(SORTS[sort]),
+    [data.watched, kind, studio, sort],
+  )
+  const pendingTitles = data.pending.filter(ofKind)
+  const pending = pendingTitles.filter(inStudio)
+  const receivedTitles = received.map((g) => g.movie).filter(ofKind)
+  const receivedShown = received.filter((g) => ofKind(g.movie) && inStudio(g.movie))
+  // "Quitar las que ya vi" acts on what is on screen: the seen ones under the current filters.
+  const receivedSeen = receivedShown.filter((g) => g.watched)
+  const sentTitles = sent.flatMap((g) => g.items.map((i) => i.movie)).filter(ofKind)
+  const sentShown = sent
+    .map((g) => ({ ...g, items: g.items.filter((i) => ofKind(i.movie) && inStudio(i.movie)) }))
+    .filter((g) => g.items.length > 0)
+
+  const filterBar = (titles: TitleSummary[], sortable = false) => (
+    <div className="profile-filters">
+      <div className="filters">
+        <StudioSelect titles={titles} value={studio} names={studioNames} onChange={setStudio} />
+        <select value={kind} onChange={(e) => setKind(e.target.value as Kind)} aria-label="Tipo">
+          <option value="all">Películas y series</option>
+          <option value="movie">Películas</option>
+          <option value="series">Series</option>
+        </select>
+        {sortable && (
+          <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="Ordenar por">
+            <option value="score">Por puntaje</option>
+            <option value="title">Por título</option>
+            <option value="year">Por año</option>
+            <option value="recent">Vistos recientemente</option>
+          </select>
+        )}
+      </div>
+    </div>
+  )
+  const noMatch = <p className="muted">No hay títulos con estos filtros.</p>
 
   const { stats } = data
   const pct = stats.totalMovies ? Math.round((stats.watchedCount / stats.totalMovies) * 100) : 0
@@ -286,15 +373,8 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
       top.scrollIntoView({ block: 'start', behavior: smooth ? 'smooth' : 'auto' })
     }
   }
-  const studioName = stats.byStudio.find((s) => s.slug === studio)?.name
   const scoreLabel = own ? 'Tu puntaje' : `Puntaje de @${data.user.tag}`
   const dist = Array.from({ length: 10 }, (_, i) => stats.scoreDistribution[String(i + 1)] ?? 0)
-  const toggle = (slug: string) =>
-    setClosed((c) => {
-      const n = new Set(c)
-      if (!n.delete(slug)) n.add(slug)
-      return n
-    })
 
   return (
     <>
@@ -341,53 +421,11 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
           </EmptyState>
         ) : (
           <>
-            <div className="profile-filters">
-              <div className="filters">
-                {studioName && (
-                  <button type="button" className="chip-q" onClick={() => setStudio('all')} aria-label={`Quitar el filtro de estudio ${studioName}`}>
-                    Filtrando: {studioName} <X size={14} aria-hidden="true" />
-                  </button>
-                )}
-                <select value={kind} onChange={(e) => setKind(e.target.value as Kind)} aria-label="Tipo">
-                  <option value="all">Películas y series</option>
-                  <option value="movie">Películas</option>
-                  <option value="series">Series</option>
-                </select>
-                <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="Ordenar por">
-                  <option value="score">Por puntaje</option>
-                  <option value="title">Por título</option>
-                  <option value="year">Por año</option>
-                  <option value="recent">Vistos recientemente</option>
-                </select>
-              </div>
-            </div>
-
-            {groups.length === 0 && <p className="muted">No hay títulos con estos filtros.</p>}
-            {studio !== 'all' ? (
-              <div className="grid era-body p-grid">
-                {groups.flatMap((g) => g.items).map((e) => <ProfileCard key={e.movie.id} m={e.movie} score={e.score} scoreLabel={scoreLabel} />)}
-              </div>
-            ) : (
-              groups.map(({ s, items }) => {
-                const open = !closed.has(s.slug)
-                return (
-                  <section key={s.slug} className="era">
-                    <h2>
-                      <button type="button" className="era-toggle" aria-expanded={open} onClick={() => toggle(s.slug)}>
-                        <i className={`chev ${open ? 'open' : ''}`} aria-hidden="true" />
-                        {s.logoUrl && <StudioLogo name={s.name} url={s.logoUrl} className="mini" />}
-                        {s.name}
-                        <em>{s.watched} {s.watched === 1 ? 'vista' : 'vistas'}{s.avgScore !== null ? ` · prom. ${s.avgScore.toFixed(1)}` : ''}</em>
-                      </button>
-                    </h2>
-                    {open && (
-                      <div className="grid era-body p-grid">
-                        {items.map((e) => <ProfileCard key={e.movie.id} m={e.movie} score={e.score} scoreLabel={scoreLabel} />)}
-                      </div>
-                    )}
-                  </section>
-                )
-              })
+            {filterBar(watchedTitles, true)}
+            {watched.length === 0 ? noMatch : (
+              <CardGrid>
+                {watched.map((e) => <ProfileCard key={e.movie.id} m={e.movie} meta={e.movie.studio.name} score={e.score} scoreLabel={scoreLabel} />)}
+              </CardGrid>
             )}
           </>
         )
@@ -399,8 +437,11 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
             {own && 'Toca el marcador en cualquier título para guardarlo aquí y verlo después.'}
           </EmptyState>
         ) : (
-          <div className="grid p-grid">
-            {data.pending.map((m) => (
+          <>
+          {filterBar(pendingTitles)}
+          {pending.length === 0 ? noMatch : (
+          <CardGrid>
+            {pending.map((m) => (
               <ProfileCard
                 key={m.id}
                 m={m}
@@ -424,7 +465,9 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
                 <span className="muted small-note">Agregada el {fmtDate(m.addedAt)}</span>
               </ProfileCard>
             ))}
-          </div>
+          </CardGrid>
+          )}
+          </>
         )
       )}
 
@@ -441,6 +484,7 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
           )
         ) : (
           <>
+          {filterBar(receivedTitles)}
           {receivedSeen.length > 0 && (
             <div className="reco-tools">
               <button
@@ -455,8 +499,9 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
               </button>
             </div>
           )}
-          <div className="grid p-grid">
-            {received.map((g) => (
+          {receivedShown.length === 0 ? noMatch : (
+          <CardGrid>
+            {receivedShown.map((g) => (
               <ProfileCard
                 key={g.movie.id}
                 m={g.movie}
@@ -496,7 +541,8 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
                 ))}
               </ProfileCard>
             ))}
-          </div>
+          </CardGrid>
+          )}
           </>
         )
       )}
@@ -507,12 +553,15 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
             Toca el avión de papel en cualquier título para recomendárselo a alguien del grupo.
           </EmptyState>
         ) : (
-          sent.map((g) => {
+          <>
+          {filterBar(sentTitles)}
+          {sentShown.length === 0 && noMatch}
+          {sentShown.map((g) => {
             const seen = g.items.filter((i) => i.watched).length
             return (
               <section key={g.toTag} className="era">
                 <h2><span className="reco-head">@{g.toTag}<em>{g.items.length} {g.items.length === 1 ? 'recomendación' : 'recomendaciones'} · {seen} {seen === 1 ? 'vista' : 'vistas'}</em></span></h2>
-                <div className="grid p-grid">
+                <CardGrid>
                   {g.items.map((i) => (
                     <ProfileCard
                       key={i.id}
@@ -539,10 +588,11 @@ function ProfileView({ data, own }: { data: ProfileData; own: boolean }) {
                       {i.note && <q className="reco-note">{i.note}</q>}
                     </ProfileCard>
                   ))}
-                </div>
+                </CardGrid>
               </section>
             )
-          })
+          })}
+          </>
         )
       )}
     </>

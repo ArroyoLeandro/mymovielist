@@ -629,13 +629,25 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
 .profile-tabs { margin-bottom: var(--s2); }
 .profile-filters { display: grid; gap: var(--s3); margin: var(--s4) 0 var(--s2); }
 .profile-filters .filters { flex-wrap: wrap; }
+/* Option text sets a select's width: a long studio name shrinks the control (ellipsis) instead of widening the page. */
+.profile-filters select { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Phones: the studio select gets its own row; type and sort share the next one. */
+@media (max-width: 599.98px) {
+  .profile-filters .p-studio { flex: 1 1 100%; }
+  .profile-filters select:not(.p-studio) { flex: 1 1 0; padding: 0 28px 0 12px; background-position: right 10px center; }
+}
 
 .thumb { width: 52px; border-radius: var(--r-sm); font-size: 1.2rem; }
 .info { display: grid; min-width: 0; }
 .info strong { font-weight: 600; }
 
 /* Profile lists: catalog cards (section 7) in the catalog grid; the actions sit at the bottom so a row lines up. */
-.era > .p-grid { margin-bottom: var(--s5); }
+.era > .p-grid, .era > .p-chunks { margin-bottom: var(--s5); }
+/* A long flat list in full-row chunks (CardGrid): the gap between chunks equals the grid row gap, so it reads as one
+   grid; the estimate is about 12 desktop rows (30 on phones) and is replaced by the real size once rendered. */
+.p-chunks { display: grid; row-gap: var(--s5); }
+.p-chunks > .era-body { contain-intrinsic-size: auto 5200px; }
+@media (max-width: 599.98px) { .p-chunks { row-gap: 20px; } .p-chunks > .era-body { contain-intrinsic-size: auto 9000px; } }
 .p-card .small-note, .p-card .reco-from { overflow-wrap: anywhere; line-height: 1.35; }
 .p-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: auto; padding-top: var(--s2); }
 .p-actions .tag { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
