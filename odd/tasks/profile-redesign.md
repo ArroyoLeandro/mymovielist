@@ -73,6 +73,8 @@ Rework the profile page (`/u/:tag`, own and other users) so it reads clearly at 
 
 - 2026-10-08: P4-P6 slice 94074ea..5ce6e85: RDD assess medium, `under_budget` (not reviewed; stays pending in the slice budget). Parent spot check: `npm run build` re-run passes; final-Kanji1 1280/360 screenshots viewed (flat grid, two-column band at 1280, stacked on phone); no vite/php dev server left running.
 
+- 2026-10-08: P4-P6 delivered (user authorized). `main` fast-forwarded and pushed. Prod: frontend only (no `api/` changes); bundle index-Bah5x6dE.js / index-BCx8u83n.css over TUS, then index.html; previous bundle (index-DAf3BW-x.js / index-CA4hmEi9.css) deleted. Check: site serves the new bundle names, JS contains "Todos los estudios", CSS 200.
+
 ## Next step
 
-- Merge, push and deploy of P4-P6 (user decision).
+- User feedback on phones/tablets (600-960px not checked).
