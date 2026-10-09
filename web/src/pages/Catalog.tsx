@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
-import { scrollBehavior } from '../lib/motion'
 import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, type Movie, type RatingRow } from '../api'
 import { useAuth } from '../auth'
@@ -15,6 +14,7 @@ import Tabs, { type TabItem } from '../components/Tabs'
 import TitleCard, { type PendingFn, type SaveFn } from '../components/TitleCard'
 import { matchesProviders, ProviderDictContext, type PType } from '../lib/providers'
 import { blankRow, isEmptyRow, patchEntry, upsertRow } from '../lib/ratings'
+import { scrollToExact } from '../lib/scrollToExact'
 import { patchTitle } from '../lib/titleCache'
 import { useCatalog } from '../queries'
 
@@ -224,7 +224,7 @@ function CatalogView({ slug }: { slug: string }) {
     setTimeout(() => {
       const el = document.getElementById(jumpT ? `t-${jumpT}` : `saga-${jumpSaga}`)
       if (!el) return
-      el.scrollIntoView({ behavior: scrollBehavior(), block: jumpT ? 'center' : 'start' })
+      void scrollToExact(el, jumpT ? 'center' : 'start')
       el.classList.add('flash')
       setTimeout(() => el.classList.remove('flash'), 2400)
     }, 80)
@@ -270,7 +270,10 @@ function CatalogView({ slug }: { slug: string }) {
     })
   const jump = (slug: string) => {
     if (collapsed.has(slug)) toggle(slug)
-    requestAnimationFrame(() => document.getElementById(`sec-${slug}`)?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' }))
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`sec-${slug}`)
+      if (el) void scrollToExact(el, 'start')
+    })
   }
   const allCollapsed = viewSections.every((s) => collapsed.has(s.slug))
   const card = (m: Movie, sectionName?: string) => (

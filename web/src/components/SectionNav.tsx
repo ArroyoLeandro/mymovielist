@@ -19,6 +19,7 @@ const stickyOffset = (el: HTMLElement | null) =>
 /**
  * Scrollspy: the last section (document order) whose top has reached the line under the sticky header and toolbar
  * (a jumped-to section lands there through its scroll margin); null above the first one, at the top of the page.
+ * Recomputed on scroll, resize and any layout change of the sections (one update per frame).
  */
 function useScrollSpy(slugs: string[], ref: RefObject<HTMLElement | null>) {
   const [active, setActive] = useState<string | null>(null)
@@ -43,8 +44,20 @@ function useScrollSpy(slugs: string[], ref: RefObject<HTMLElement | null>) {
     update()
     window.addEventListener('scroll', schedule, { passive: true })
     window.addEventListener('resize', schedule)
+    // Layout changes without a scroll (collapse/expand, placeholders resolving, the toolbar wrapping) move the sections
+    // too: any size change of a section, of the page or of the toolbar recomputes.
+    const ro = new ResizeObserver(schedule)
+    for (const slug of slugs) {
+      const el = document.getElementById(`sec-${slug}`)
+      if (el) ro.observe(el)
+    }
+    const page = document.querySelector('main')
+    if (page) ro.observe(page)
+    const bar = ref.current?.closest('.sticky-bar')
+    if (bar) ro.observe(bar)
     return () => {
       cancelAnimationFrame(frame)
+      ro.disconnect()
       window.removeEventListener('scroll', schedule)
       window.removeEventListener('resize', schedule)
     }

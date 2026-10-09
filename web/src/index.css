@@ -386,6 +386,8 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
 }
 .chev.open { transform: rotate(45deg); }
 .era-body { content-visibility: auto; contain-intrinsic-size: auto 900px; }
+/* lib/scrollToExact: rendered for one frame before a jump so the browser remembers the real size (the `auto` above). */
+.era-body.cv-measure { content-visibility: visible; }
 .sentinel { display: grid; place-items: center; min-height: 60px; margin-top: var(--s5); }
 .sentinel .grid { width: 100%; }
 
