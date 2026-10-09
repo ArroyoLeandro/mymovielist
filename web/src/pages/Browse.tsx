@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import type { RatingRow, StateTitle, Studio, TitleFilters } from '../api'
 import { useAuth } from '../auth'
 import LiveCard from '../components/LiveCard'
-import { LoaderCircle, SearchX, X } from 'lucide-react'
+import { SearchX, X } from 'lucide-react'
 import { GridSkeleton } from '../components/Skeleton'
 import { EmptyState, ErrorState } from '../components/States'
 import ProviderPicker, { type PickerOption } from '../components/ProviderPicker'
@@ -101,7 +101,7 @@ export default function Browse() {
   const optionById = useMemo(() => new Map(options.map((o) => [o.id, o])), [options])
 
   const list = useTitlesList(filters)
-  // Previous filter's grid, shown dimmed while the new one loads.
+  // A new filter is loading: the grid shows the skeleton, not the previous filter's titles.
   const switching = list.isPlaceholderData
 
   // Infinite scroll: load the next page when the sentinel gets close to the viewport.
@@ -148,7 +148,7 @@ export default function Browse() {
     return () => clearTimeout(timer) // the title matched again (undone from the modal) or the filter changed
   }, [leavingKey, qc, filters])
 
-  // A new filter, sort or search starts at the top of the results once they arrive (back/forward restores the old
+  // A new filter, sort or search starts at the top of the results right away, over the skeleton (back/forward restores the old
   // position instead). The results begin right under the filters, so this is the page top: aiming at the grid itself
   // lands short or long, as the sticky filter bar changes height when it unsticks.
   const results = useRef<HTMLDivElement>(null)
@@ -162,11 +162,11 @@ export default function Browse() {
       scrollPending.current = navType !== 'POP'
     }
     const el = results.current
-    if (!scrollPending.current || switching || !el) return
+    if (!scrollPending.current || !el) return
     scrollPending.current = false
     const margin = parseFloat(getComputedStyle(el).scrollMarginTop) || 0
     if (el.getBoundingClientRect().top < margin) window.scrollTo({ top: 0, behavior: scrollBehavior() })
-  }, [filterKey, navType, switching])
+  }, [filterKey, navType])
 
   const anyFilter = KEYS.some((k) => params.has(k))
 
@@ -224,15 +224,10 @@ export default function Browse() {
         </div>
       </StickyBar>
 
-      <div className={`results ${switching ? 'is-switching' : ''}`} ref={results} aria-busy={switching || undefined}>
-        {switching && (
-          <div className="results-loading" role="status">
-            <span><LoaderCircle size={16} className="spin" aria-hidden="true" />Cargando…</span>
-          </div>
-        )}
+      <div className="results" ref={results}>
         {list.error && !list.data ? (
           <ErrorState error={list.error} onRetry={() => void list.refetch()} />
-        ) : !list.data ? (
+        ) : !list.data || switching ? (
           <GridSkeleton cards={12} />
         ) : items.length === 0 && filters.q && (filters.q.trim().length >= 2) ? (
           <>
