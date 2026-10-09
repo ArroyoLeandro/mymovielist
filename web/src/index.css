@@ -258,27 +258,37 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
 @media (max-width: 599.98px) { .login-card { padding: var(--s5) 20px; } }
 
 /* ---------- 7. Cards ---------- */
+/* One card shell for every title grid and the saga cards (components/Card): a panel surface with the poster flush at
+   the top, clipped to the card's top corners, then a padded body whose footer (.card-actions) is pinned to the bottom,
+   so the cards of a grid row (stretched to the row height) line up. */
 .card {
   --act: 28px; --act-icon: 16px; --act-gap: 4px;
-  position: relative; display: flex; flex-direction: column; gap: var(--s1); min-width: 0;
-  scroll-margin-top: var(--anchor-offset);
+  position: relative; display: flex; flex-direction: column; min-width: 0;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  scroll-margin-top: var(--anchor-offset); transition: border-color var(--fast), box-shadow var(--fast);
 }
 @media (min-width: 1024px) { .card { --act: 30px; --act-icon: 18px; } }
 @media (max-width: 599.98px) { .card { --act: 24px; --act-icon: 14px; --act-gap: 3px; } }
-.card > * { min-width: 0; max-width: 100%; }
-.card .art { position: relative; margin-bottom: 6px; border-radius: var(--radius); transition: box-shadow var(--fast); }
+.card .art { position: relative; overflow: hidden; border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0; }
+.card .art .poster, .card .art-open { border-radius: 0; }
+.card-body { display: flex; flex: 1; flex-direction: column; gap: var(--s1); min-width: 0; padding: var(--s2) var(--s3) var(--s3); }
+.card-body > * { min-width: 0; max-width: 100%; }
+@media (max-width: 599.98px) { .card-body { padding: 6px var(--s2) 10px; } }
+.card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: auto; padding-top: var(--s1); }
+.card-actions .tag { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.card-actions > .meter { flex: 1; }
 .poster { display: block; width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: var(--radius); background: var(--panel-2); }
 .poster-empty {
   display: grid; place-items: center; font-family: var(--display); font-size: 2.4rem; font-weight: 800;
   color: var(--line-strong); background: linear-gradient(160deg, var(--panel-2), var(--panel));
 }
-/* Watched titles keep full color and a lime ring; the rest are dimmed until hovered. */
-.card.seen .art { box-shadow: 0 0 0 2px #d4f52699; }
+/* Watched titles: a lime ring around the whole card. */
+.card.seen { border-color: #d4f52699; box-shadow: 0 0 0 1px #d4f52699; }
 .art-open { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: var(--radius); }
 
 /* Two-line title slot: every card in a row keeps the same height and alignment. */
 .card h3 { min-height: 2.5em; font-size: var(--fs-card); font-weight: 700; line-height: 1.25; }
-.title-open, .saga-card h3 {
+.title-open, .card-title {
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
   overflow: hidden; overflow-wrap: anywhere;
 }
@@ -333,9 +343,8 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
 
 /* Saga cards (home): a link around poster, name and progress. */
 .saga-card { text-decoration: none; }
-.saga-card:hover .art { box-shadow: 0 0 0 2px var(--gold); }
-.saga-card .meter { margin-top: 2px; }
-.card.flash .art, .section.flash { animation: flash 2.2s ease-out; }
+.saga-card:hover { border-color: var(--gold); }
+.card.flash, .section.flash { animation: flash 2.2s ease-out; }
 @keyframes flash {
   0%, 40% { outline: 3px solid var(--gold); outline-offset: 4px; border-radius: var(--radius); }
   100% { outline: 3px solid transparent; outline-offset: 4px; }
@@ -662,8 +671,6 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
 .p-chunks > .era-body { contain-intrinsic-size: none; contain-intrinsic-block-size: auto 5200px; }
 @media (max-width: 599.98px) { .p-chunks { row-gap: 20px; } .p-chunks > .era-body { contain-intrinsic-block-size: auto 9000px; } }
 .p-card .small-note, .p-card .reco-from { overflow-wrap: anywhere; line-height: 1.35; }
-.p-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: auto; padding-top: var(--s2); }
-.p-actions .tag { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .my-score.none { background: #0b0a1ccc; border: 1px solid var(--line-strong); color: var(--muted); font-weight: 600; backdrop-filter: blur(4px); }
 .small-note { font-size: 0.78rem; }
 .reco-from { color: var(--muted); font-size: var(--fs-meta); }
@@ -741,6 +748,7 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
 }
 @keyframes shimmer { from { background-position: 150% 0; } to { background-position: -50% 0; } }
 .sk-poster { width: 100%; aspect-ratio: 2 / 3; margin-bottom: 6px; border-radius: var(--radius); }
+.card .art .sk-poster { margin: 0; border-radius: 0; }
 .sk-card-title { display: grid; align-content: start; gap: 6px; min-height: calc(var(--fs-card) * 2.5); }
 .sk-line { height: 14px; }
 .sk-line.sm { height: 10px; }

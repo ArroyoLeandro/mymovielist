@@ -1,30 +1,15 @@
 import type { CSSProperties, ReactNode } from 'react'
+import { CardSkeleton } from './Card'
 
 /** Shimmering placeholder block. Size it with className (CSS) or the style prop. */
 export function Sk({ className = '', style }: { className?: string; style?: CSSProperties }) {
   return <span className={`sk ${className}`} style={style} aria-hidden="true" />
 }
 
-/** Same boxes as TitleCard: poster, two-line title slot, year, two-line summary. */
-function SkCard() {
-  return (
-    <div className="card" aria-hidden="true">
-      <Sk className="sk-poster" />
-      <div className="sk-card-title">
-        <Sk className="sk-line" style={{ width: '85%' }} />
-        <Sk className="sk-line" style={{ width: '55%' }} />
-      </div>
-      <Sk className="sk-line sm" style={{ width: '40%', margin: '4px 0' }} />
-      <Sk className="sk-line sm" style={{ width: '70%' }} />
-      <Sk className="sk-line sm" style={{ width: '45%', marginTop: 4 }} />
-    </div>
-  )
-}
-
 function SkGrid({ cards, capped = false }: { cards: number; capped?: boolean }) {
   return (
     <div className={`grid ${capped ? 'capped' : ''}`} aria-hidden="true">
-      {Array.from({ length: cards }, (_, i) => <SkCard key={i} />)}
+      {Array.from({ length: cards }, (_, i) => <CardSkeleton key={i} />)}
     </div>
   )
 }

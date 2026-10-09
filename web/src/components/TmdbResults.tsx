@@ -3,6 +3,7 @@ import { ArrowUpRight, Check, CircleAlert, LoaderCircle, Plus, RotateCw, SearchX
 import { ApiError, type TmdbResult } from '../api'
 import { useTmdbSearch } from '../queries'
 import { resultKey, titleLink, useAddTitle, type AddState } from '../lib/useAddTitle'
+import Card, { CardSkeleton } from './Card'
 import Poster from './Poster'
 import { Sk } from './Skeleton'
 import '../tmdb.css'
@@ -130,11 +131,7 @@ export function TmdbPanel({ q }: { q: string }) {
       </div>
       {search.isPending && search.fetchStatus !== 'idle' ? (
         <div className="tmdb-grid" aria-busy="true" aria-label="Buscando en TMDB">
-          {Array.from({ length: 6 }, (_, i) => (
-            <div key={i} className="tmdb-card" aria-hidden="true">
-              <Sk className="sk-poster" /><Sk className="sk-line" style={{ width: '80%' }} /><Sk className="sk-line sm" style={{ width: '45%', marginTop: 6 }} /><Sk className="tmdb-sk-btn wide" />
-            </div>
-          ))}
+          {Array.from({ length: 6 }, (_, i) => <CardSkeleton key={i} />)}
         </div>
       ) : search.error ? (
         <div className="tmdb-note is-error" role="alert">
@@ -149,11 +146,16 @@ export function TmdbPanel({ q }: { q: string }) {
           {list.map((r) => {
             const st = states.get(resultKey(r))
             return (
-              <li key={resultKey(r)} className={`tmdb-card ${st?.status === 'added' ? 'is-added' : ''}`}>
-                <div className="art"><Poster url={r.posterUrl} title={r.title} /></div>
-                <strong className="tmdb-card-title">{r.title}</strong>
-                <Meta r={r} />
-                <Action r={r} state={st} onAdd={() => void add(r)} />
+              <li key={resultKey(r)}>
+                <Card
+                  className={`tmdb-card ${st?.status === 'added' ? 'is-added' : ''}`}
+                  title={r.title}
+                  posterUrl={r.posterUrl}
+                  withProviders={false}
+                  actions={<Action r={r} state={st} onAdd={() => void add(r)} />}
+                >
+                  <Meta r={r} />
+                </Card>
               </li>
             )
           })}

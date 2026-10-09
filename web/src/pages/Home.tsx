@@ -3,7 +3,7 @@ import { ArrowRight } from 'lucide-react'
 import { useAuth } from '../auth'
 import GridSection from '../components/GridSection'
 import LiveCard from '../components/LiveCard'
-import Poster from '../components/Poster'
+import Card from '../components/Card'
 import { RowsSkeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/States'
 import { useHome } from '../queries'
@@ -39,12 +39,16 @@ export default function Home() {
             <GridSection key={row.key} name={row.title} action={action} capped>
               {row.kind === 'sagas'
                 ? row.items.slice(0, HOME_LIMIT).map((s) => (
-                    <Link key={s.slug} to={`/studio/${s.studioSlug}?tab=sagas&saga=${s.slug}`} className="card saga-card">
-                      <div className="art"><Poster url={s.posterUrl} title={s.name} /></div>
-                      <h3>{s.name}</h3>
-                      <p className="year">{s.seen}/{s.total} vistas</p>
-                      <div className="meter" aria-hidden="true"><i style={{ width: `${s.total ? (s.seen / s.total) * 100 : 0}%` }} /></div>
-                    </Link>
+                    <Card
+                      key={s.slug}
+                      to={`/studio/${s.studioSlug}?tab=sagas&saga=${s.slug}`}
+                      className="saga-card"
+                      title={s.name}
+                      posterUrl={s.posterUrl}
+                      meta={`${s.seen}/${s.total} vistas`}
+                      withProviders={false}
+                      actions={<div className="meter" aria-hidden="true"><i style={{ width: `${s.total ? (s.seen / s.total) * 100 : 0}%` }} /></div>}
+                    />
                   ))
                 : row.items.slice(0, HOME_LIMIT).map((t) => <LiveCard key={t.id} item={t} me={me} showStudio />)}
             </GridSection>

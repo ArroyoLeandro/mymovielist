@@ -64,7 +64,6 @@
 
 .tmdb-sk-thumb { width: 40px; aspect-ratio: 2 / 3; border-radius: 6px; }
 .tmdb-sk-btn { width: 96px; height: 30px; border-radius: var(--r-pill); }
-.tmdb-sk-btn.wide { width: 100%; margin-top: var(--s2); }
 
 /* Phones: the action drops under the text so long titles keep their room. */
 @media (max-width: 419.98px) {
@@ -86,14 +85,12 @@
   display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--s5) var(--s4);
   margin: 0; padding: 0; list-style: none;
 }
-.tmdb-card { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.tmdb-card .art { margin-bottom: 4px; }
-.tmdb-card .art .poster { width: 100%; aspect-ratio: 2 / 3; border-radius: var(--radius); object-fit: cover; }
-.tmdb-card-title { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-size: var(--fs-card); line-height: 1.25; }
-.tmdb-card > :last-child { margin-top: auto; padding-top: var(--s2); }
+/* Result cards are the shared Card (components/Card); the list item only stretches it to the row height. */
+.tmdb-grid > li { display: flex; min-width: 0; }
+.tmdb-grid > li > .card { flex: 1; }
 .tmdb-card .tmdb-add { width: 100%; }
 .tmdb-card .tmdb-done { justify-items: start; }
-.tmdb-card.is-added .art .poster { box-shadow: 0 0 0 2px var(--mint); }
+.tmdb-card.is-added { border-color: var(--mint); box-shadow: 0 0 0 1px var(--mint); }
 .tmdb-credit { margin: var(--s5) 0 0; color: var(--faint); font-size: var(--fs-xs); }
 .tmdb-filters-note { margin: var(--s3) 0 0; color: var(--muted); font-size: 0.88rem; }
 @media (max-width: 599.98px) { .tmdb-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4) var(--s3); } }

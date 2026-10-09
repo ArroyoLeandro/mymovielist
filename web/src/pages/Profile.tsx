@@ -4,8 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { api, type ListEntry, type Profile as ProfileData, type Recommended, type TitleSummary } from '../api'
 import { useAuth } from '../auth'
 import Avatar from '../components/Avatar'
-import { ProviderStrip } from '../components/Providers'
-import Poster from '../components/Poster'
+import Card from '../components/Card'
 import ScoreChart from '../components/ScoreChart'
 import { Bookmark, Eye, Inbox, Send, X } from 'lucide-react'
 import { ProfileSkeleton } from '../components/Skeleton'
@@ -71,32 +70,29 @@ function useOpenTitle() {
 }
 
 /**
- * One title as a catalog-look card: poster (type badge, optional score pill) and title both open the title modal;
- * `meta` follows the year, `children` sit under it and `actions` are pinned to the bottom so a row of cards lines up.
+ * One title in the profile, through the shared Card: poster (type badge, optional score pill) and title both open the
+ * title modal; `meta` follows the year, `children` sit under it and `actions` are the card footer.
  */
 function ProfileCard({ m, score, scoreLabel, meta, done = false, actions, children }: {
   m: TitleSummary; score?: number | null; scoreLabel?: string; meta?: string; done?: boolean; actions?: ReactNode; children?: ReactNode
 }) {
-  const type = titleType(m)
   const openTitle = useOpenTitle()
-  const open = () => void openTitle(m)
   return (
-    <article className={`card p-card ${done ? 'is-done' : ''}`}>
-      <div className="art">
-        <Poster url={m.posterUrl} title={m.title} />
-        {/* Mouse/touch convenience; keyboard and screen-reader users open the modal from the title. */}
-        <button type="button" className="art-open" tabIndex={-1} aria-hidden="true" onClick={open} />
-        {type && <span className={`badge ${type.kind}`}>{type.label}</span>}
-        {score !== undefined && (
-          <span className={`my-score ${score === null ? 'none' : ''}`} title={scoreLabel}>{score === null ? 'Sin puntaje' : `★ ${score}`}</span>
-        )}
-      </div>
-      <h3><button type="button" className="title-open" aria-haspopup="dialog" onClick={open}>{m.title}</button></h3>
-      <p className="year">{m.year}{meta ? ` · ${meta}` : ''}</p>
-      <ProviderStrip refs={m.providers} />
+    <Card
+      className={`p-card ${done ? 'is-done' : ''}`}
+      title={m.title}
+      posterUrl={m.posterUrl}
+      onOpen={() => void openTitle(m)}
+      badge={titleType(m)}
+      pill={score !== undefined && (
+        <span className={`my-score ${score === null ? 'none' : ''}`} title={scoreLabel}>{score === null ? 'Sin puntaje' : `★ ${score}`}</span>
+      )}
+      meta={`${m.year}${meta ? ` · ${meta}` : ''}`}
+      providers={m.providers}
+      actions={actions}
+    >
       {children}
-      {actions && <div className="p-actions">{actions}</div>}
-    </article>
+    </Card>
   )
 }
 
