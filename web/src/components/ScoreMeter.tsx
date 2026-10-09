@@ -88,7 +88,7 @@ export default function ScoreMeter({ value, onChange, disabled = false, compact 
   return (
     <div className={`meter-wrap ${disabled ? 'disabled' : ''} ${compact ? 'compact' : ''}`}>
       <p className="meter-read" aria-hidden="true">
-        <strong key={shown ?? 'none'} className={shown ? 'pop' : 'none'}>{shown ?? '–'}</strong>
+        <strong key={shown ?? 'none'} className={shown ? 'bump' : 'none'}>{shown ?? '–'}</strong>
         <span>{shown ? SCORE_LABELS[shown - 1] : 'Toca para puntuar'}</span>
       </p>
       <div

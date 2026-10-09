@@ -162,7 +162,7 @@
 .meter-read { display: flex; align-items: baseline; gap: 10px; min-height: 3rem; margin: 0; }
 .meter-read strong { min-width: 1.3ch; font-family: var(--display); font-size: 2.6rem; font-weight: 800; line-height: 1; color: var(--gold); }
 .meter-read strong.none { color: var(--line-strong); }
-.meter-read strong.pop { animation: bump 0.22s ease-out; }
+.meter-read strong.bump { animation: bump 0.22s ease-out; }
 .meter-read span { min-width: 0; overflow-wrap: anywhere; font-size: 1.05rem; font-weight: 500; }
 .score-meter { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 3px; min-width: 0; border-radius: 10px; cursor: pointer; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
 .score-meter:focus-visible { outline-offset: 4px; }
