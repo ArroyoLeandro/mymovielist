@@ -58,7 +58,18 @@ export interface Catalog {
   /** Providers used by this studio's titles, keyed by id. */
   providers: Record<string, ProviderInfo>
 }
-export interface Studio { slug: string; name: string; logoUrl: string | null; kind?: 'studio' | 'category'; movieCount: number }
+export interface Studio {
+  slug: string
+  name: string
+  logoUrl: string | null
+  kind?: 'studio' | 'category'
+  /** Total titles (movies + series). */
+  movieCount: number
+  /** Movies only (`media_type = 'movie'`). */
+  filmCount: number
+  /** Series only (`media_type = 'series'`). */
+  seriesCount: number
+}
 export interface Progress { slug: string; watchedCount: number }
 export interface Entry { movieId: number; watched: boolean; score: number | null; watchedAt: string | null }
 /** Global ranking row. */

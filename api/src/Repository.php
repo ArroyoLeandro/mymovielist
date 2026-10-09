@@ -54,16 +54,22 @@ final class Repository
         return $this->user('SELECT id, tag FROM users WHERE id = ?', [$id]);
     }
 
-    /** Static (not per-user) list of studios. @return list<array{slug: string, name: string, logoUrl: string|null, kind: string, movieCount: int}> */
+    /**
+     * Static (not per-user) list of studios. `movieCount` is the total (movies + series, kept for compatibility);
+     * `filmCount` and `seriesCount` split it by `media_type`.
+     * @return list<array{slug: string, name: string, logoUrl: string|null, kind: string, movieCount: int, filmCount: int, seriesCount: int}>
+     */
     public function studios(): array
     {
         $rows = $this->run(
-            'SELECT s.slug, s.name, s.logo_url, s.kind, COUNT(m.id) AS movie_count
+            "SELECT s.slug, s.name, s.logo_url, s.kind, COUNT(m.id) AS movie_count,
+                    COALESCE(SUM(CASE WHEN m.media_type = 'movie' THEN 1 ELSE 0 END), 0) AS film_count,
+                    COALESCE(SUM(CASE WHEN m.media_type = 'series' THEN 1 ELSE 0 END), 0) AS series_count
              FROM studios s
              LEFT JOIN sections sec ON sec.studio_id = s.id
              LEFT JOIN movies m ON m.section_id = sec.id
              GROUP BY s.id, s.slug, s.name, s.logo_url, s.kind, s.sort_order
-             ORDER BY s.sort_order, s.name',
+             ORDER BY s.sort_order, s.name",
             []
         )->fetchAll();
 
@@ -73,6 +79,8 @@ final class Repository
             'logoUrl' => $r['logo_url'],
             'kind' => $r['kind'],
             'movieCount' => (int) $r['movie_count'],
+            'filmCount' => (int) $r['film_count'],
+            'seriesCount' => (int) $r['series_count'],
         ], $rows);
     }
 
