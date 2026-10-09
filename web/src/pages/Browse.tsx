@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useNavigationType, useSearchParams } from 'react-router-dom'
-import type { StateTitle, Studio, TitleFilters } from '../api'
+import { useQueryClient } from '@tanstack/react-query'
+import type { RatingRow, StateTitle, Studio, TitleFilters } from '../api'
 import { useAuth } from '../auth'
 import LiveCard from '../components/LiveCard'
 import { SearchX, X } from 'lucide-react'
@@ -10,7 +11,8 @@ import ProviderPicker, { type PickerOption } from '../components/ProviderPicker'
 import { ProviderLogo } from '../components/Providers'
 import StickyBar from '../components/StickyBar'
 import { TmdbPanel } from '../components/TmdbResults'
-import { scrollBehavior } from '../lib/motion'
+import { reducedMotion, scrollBehavior } from '../lib/motion'
+import { dropTitles } from '../lib/titleCache'
 import { parseIds, parsePType, PTYPES, type PType } from '../lib/providers'
 import { useProviders, useStudios, useTitlesList } from '../queries'
 
@@ -32,6 +34,10 @@ const countOf = (s: Studio, type: string | undefined) =>
   type === 'movie' ? s.filmCount : type === 'series' ? s.seriesCount : s.movieCount
 const offered = (s: Studio, type: string | undefined) =>
   !(s.kind === 'category' && TYPE_CATEGORIES.has(s.slug)) && countOf(s, type) > 0
+
+/** Whether a title's (possibly patched) state still matches the seen filter the server applied to the list. */
+const matchesStatus = (r: RatingRow, status: string | undefined) =>
+  status === 'watched' ? r.watched : status === 'unwatched' ? !r.watched : status === 'pending' ? r.pending : true
 
 /** "Ver todo": every title across all catalogs, filterable, loaded 60 at a time. */
 export default function Browse() {
@@ -126,6 +132,21 @@ export default function Browse() {
     return out
   }, [pages])
   const total = pages?.[0]?.total
+
+  // A card action can make a title stop matching the seen filter (e.g. marked seen under "Sin ver"): its card fades
+  // out, then only that title leaves the cached pages; nothing refetches and the other cards keep their order.
+  const qc = useQueryClient()
+  const leaving = useMemo(
+    () => new Set(switching ? [] : items.filter((t) => !matchesStatus(t.state, filters.status)).map((t) => t.id)),
+    [items, filters.status, switching],
+  )
+  const leavingKey = [...leaving].join(',')
+  useEffect(() => {
+    if (!leavingKey) return
+    const ids = new Set(leavingKey.split(',').map(Number))
+    const timer = setTimeout(() => dropTitles(qc, ['titles', filters], ids), reducedMotion() ? 0 : 200)
+    return () => clearTimeout(timer) // the title matched again (undone from the modal) or the filter changed
+  }, [leavingKey, qc, filters])
 
   // A new filter, sort or search starts at the top of the results once they arrive (back/forward restores the old
   // position instead). The results begin right under the filters, so this is the page top: aiming at the grid itself
@@ -229,7 +250,7 @@ export default function Browse() {
         ) : (
           <>
             <div className="grid">
-              {items.map((t) => <LiveCard key={t.id} item={t} me={me} showStudio />)}
+              {items.map((t) => <LiveCard key={t.id} item={t} me={me} showStudio leaving={leaving.has(t.id)} />)}
             </div>
             <div ref={sentinel} className="sentinel">
               {isFetchingNextPage ? <GridSkeleton cards={6} /> : hasNextPage && !switching && <button type="button" className="btn btn-ghost" onClick={() => void fetchNextPage()}>Cargar más</button>}

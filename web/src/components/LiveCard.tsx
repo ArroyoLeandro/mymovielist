@@ -10,7 +10,11 @@ import TitleCard from './TitleCard'
  * Edits apply optimistically on top of the server state; once saved, the title's state is patched in place in every
  * cached list (no refetch now: the lists keep their order and membership until the next visit).
  */
-export default function LiveCard({ item, me, showStudio = false }: { item: StateTitle; me: string; showStudio?: boolean }) {
+export default function LiveCard({ item, me, showStudio = false, leaving = false }: {
+  item: StateTitle; me: string; showStudio?: boolean
+  /** Fading out before the list drops it (see Browse). */
+  leaving?: boolean
+}) {
   const qc = useQueryClient()
   const [local, setLocal] = useState<RatingRow | null>(null)
   useEffect(() => setLocal(null), [item.state]) // fresh server data (or the in-place patch) wins
@@ -42,5 +46,5 @@ export default function LiveCard({ item, me, showStudio = false }: { item: State
     }
   }, [item.state, qc, slug])
 
-  return <TitleCard movie={item} r={local ?? item.state} onSave={onSave} onPending={onPending} label={showStudio ? item.studio.name : undefined} studioName={item.studio.name} sectionName={item.section.name} />
+  return <TitleCard movie={item} r={local ?? item.state} onSave={onSave} onPending={onPending} label={showStudio ? item.studio.name : undefined} studioName={item.studio.name} sectionName={item.section.name} leaving={leaving} />
 }

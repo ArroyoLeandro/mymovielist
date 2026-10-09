@@ -21,9 +21,11 @@ export type CardMovie = Pick<TitleSummary, 'id' | 'title' | 'originalTitle' | 'y
  * Scoring and the per-friend ratings live in the detail modal (TitleModal), hosted by TitleDetailProvider so it
  * survives the card leaving its list; the card keeps it fed with fresh state while both are on screen.
  */
-const TitleCard = memo(function TitleCard({ movie: m, r, onSave, onPending, label, studioName, sectionName }: {
+const TitleCard = memo(function TitleCard({ movie: m, r, onSave, onPending, label, studioName, sectionName, leaving = false }: {
   movie: CardMovie; r: RatingRow | undefined; onSave: SaveFn; onPending: PendingFn
   label?: string; studioName?: string; sectionName?: string
+  /** Fading out before it leaves its list (it stopped matching the list's filter). */
+  leaving?: boolean
 }) {
   const { watched, pending, score, failed, toggleWatched, wish } = useTitleActions(m.id, r, onSave, onPending)
   const watchersCount = r?.watchersCount ?? 0
@@ -45,7 +47,7 @@ const TitleCard = memo(function TitleCard({ movie: m, r, onSave, onPending, labe
   return (
     <Card
       id={`t-${m.id}`}
-      className={watched ? 'seen' : ''}
+      className={`${watched ? 'seen' : ''}${leaving ? ' is-leaving' : ''}`.trim()}
       title={m.title}
       posterUrl={m.posterUrl}
       onOpen={openDetail}

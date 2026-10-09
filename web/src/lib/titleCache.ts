@@ -1,4 +1,4 @@
-import type { InfiniteData, QueryClient } from '@tanstack/react-query'
+import type { InfiniteData, QueryClient, QueryKey } from '@tanstack/react-query'
 import type { HomeRow, Profile, RatingRow, StateTitle, TitlesPage } from '../api'
 import { LIST_KEYS, STAT_KEYS } from '../queries'
 import { blankRow, upsertRow } from './ratings'
@@ -13,8 +13,9 @@ const patchItems = (items: StateTitle[], id: number, fn: StatePatch): StateTitle
 
 /**
  * After a card action (watched, score, wishlist): updates that title's state in every cached list that holds it,
- * in place. Order and membership do not change (a watched title stays in "Sin ver" until the next visit), so nothing
- * moves under the user. Lists are refetched on their next mount, see settleAfterAction().
+ * in place. Order and membership do not change, so nothing moves under the user; the one exception is the /catalogo
+ * grid, which drops a title that stopped matching its seen filter (dropTitles()). Lists are refetched on their next
+ * mount, see settleAfterAction().
  * @param studioSlug also patch that studio page's ratings cache
  */
 export function patchTitle(qc: QueryClient, id: number, fn: StatePatch, studioSlug?: string) {
@@ -54,6 +55,27 @@ export function patchTitle(qc: QueryClient, id: number, fn: StatePatch, studioSl
         return { ...r, watched: row.watched, pending: row.pending }
       }),
     }
+  })
+}
+
+/**
+ * Removes those titles from one cached /catalogo list, without refetching: the other titles keep their pages and order
+ * (each page keeps its keyset cursor) and the total drops by the titles found.
+ */
+export function dropTitles(qc: QueryClient, queryKey: QueryKey, ids: ReadonlySet<number>) {
+  qc.setQueryData<InfiniteData<TitlesPage>>(queryKey, (d) => {
+    if (!d) return d
+    const found = new Set<number>()
+    const pages = d.pages.map((p) => {
+      const items = p.items.filter((t) => {
+        if (!ids.has(t.id)) return true
+        found.add(t.id)
+        return false
+      })
+      return items.length === p.items.length ? p : { ...p, items }
+    })
+    if (!found.size) return d
+    return { ...d, pages: pages.map((p) => ({ ...p, total: Math.max(0, p.total - found.size) })) }
   })
 }
 
