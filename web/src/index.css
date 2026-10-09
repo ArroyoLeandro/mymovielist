@@ -650,9 +650,10 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
 .era > .p-grid, .era > .p-chunks { margin-bottom: var(--s5); }
 /* A long flat list in full-row chunks (CardGrid): the gap between chunks equals the grid row gap, so it reads as one
    grid; the estimate is about 12 desktop rows (30 on phones) and is replaced by the real size once rendered. */
-.p-chunks { display: grid; row-gap: var(--s5); }
-.p-chunks > .era-body { contain-intrinsic-size: auto 5200px; }
-@media (max-width: 599.98px) { .p-chunks { row-gap: 20px; } .p-chunks > .era-body { contain-intrinsic-size: auto 9000px; } }
+/* One minmax(0, 1fr) column and a block-size-only estimate: a skipped chunk must never size the column by width. */
+.p-chunks { display: grid; grid-template-columns: minmax(0, 1fr); row-gap: var(--s5); }
+.p-chunks > .era-body { contain-intrinsic-size: none; contain-intrinsic-block-size: auto 5200px; }
+@media (max-width: 599.98px) { .p-chunks { row-gap: 20px; } .p-chunks > .era-body { contain-intrinsic-block-size: auto 9000px; } }
 .p-card .small-note, .p-card .reco-from { overflow-wrap: anywhere; line-height: 1.35; }
 .p-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: auto; padding-top: var(--s2); }
 .p-actions .tag { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
