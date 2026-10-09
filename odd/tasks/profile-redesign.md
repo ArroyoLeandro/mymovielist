@@ -60,6 +60,8 @@ Rework the profile page (`/u/:tag`, own and other users) so it reads clearly at 
 
 - 2026-10-08: Review of the slice d1eeed3..e2a4a1f (512 lines, medium, `slice_budget_reached`): user granted consent; one reliability lens; approved and acknowledged (authority burned). Advisory only: provider guard (checked: `ProviderStrip` already handles `undefined`, no change), tied maxima label several bars (follow-up, cosmetic), no automated checks for chart/percent helpers (no web test runner). Parent spot check: `npm run build` re-run passes; 1280/360/320 screenshots viewed.
 
+- 2026-10-08: Delivered (user authorized). `main` fast-forwarded to the branch and pushed. Prod: frontend only (no `api/` changes); bundle index-DAf3BW-x.js / index-CA4hmEi9.css uploaded over TUS, then index.html; previous bundle (index-DTLWaiUI.js / index-CMMRH6hN.css) deleted. Check: site serves the new bundle names, JS contains "Progreso por estudio", CSS 200. Note: `deploy/build.sh` (`npm ci`) failed with EPERM until a leftover local vite dev server holding the rolldown binding was stopped.
+
 ## Next step
 
-- Merge to main, push and production deploy (user decision). Follow-up: single direct label on tied maxima.
+- Follow-up: single direct label on tied maxima. User feedback on phones.
