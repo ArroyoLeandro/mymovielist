@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useNavigationType, useSearchParams } from 'react-router-dom'
-import type { StateTitle, TitleFilters } from '../api'
+import type { StateTitle, Studio, TitleFilters } from '../api'
 import { useAuth } from '../auth'
 import LiveCard from '../components/LiveCard'
 import { SearchX, X } from 'lucide-react'
@@ -24,6 +24,14 @@ const SORTS: [string, string][] = [
   ['added', 'Agregadas recientemente'],
 ]
 const KEYS = ['type', 'studio', 'decade', 'status', 'sort', 'q', 'provider', 'ptype'] as const
+// Catch-all category studios that duplicate the type select: never offered as a studio ("Anime" stays).
+const TYPE_CATEGORIES = new Set(['peliculas', 'series'])
+
+/** Titles the studio has of that type ('all' or none: movies + series). */
+const countOf = (s: Studio, type: string | undefined) =>
+  type === 'movie' ? s.filmCount : type === 'series' ? s.seriesCount : s.movieCount
+const offered = (s: Studio, type: string | undefined) =>
+  !(s.kind === 'category' && TYPE_CATEGORIES.has(s.slug)) && countOf(s, type) > 0
 
 /** "Ver todo": every title across all catalogs, filterable, loaded 60 at a time. */
 export default function Browse() {
@@ -45,11 +53,25 @@ export default function Browse() {
     if (!f.provider || !parsePType(f.ptype ?? null)) delete f.ptype // the type only narrows a platform pick
     return f
   }, [params])
+  // The studio select only offers studios with titles of the selected type; a studio param it does not offer (after a
+  // type change, or an old URL with "Películas"/"Series") is dropped in the same URL update.
+  const studioOptions = useMemo(() => (studios.data ?? []).filter((s) => offered(s, filters.type)), [studios.data, filters.type])
+  const compatible = useCallback((p: URLSearchParams) => {
+    const s = studios.data?.find((x) => x.slug === p.get('studio'))
+    if (!s || offered(s, p.get('type') ?? undefined)) return p
+    const next = new URLSearchParams(p)
+    next.delete('studio')
+    return next
+  }, [studios.data])
+  useEffect(() => {
+    const next = compatible(params)
+    if (next !== params) setParams(next, { replace: true })
+  }, [compatible, params, setParams])
   const set = (k: (typeof KEYS)[number], v: string) => {
     const next = new URLSearchParams(params)
     if (v && v !== 'all') next.set(k, v)
     else next.delete(k)
-    setParams(next, { replace: true })
+    setParams(compatible(next), { replace: true })
   }
 
   // Where to watch: provider=8,337 (multi-select) and ptype (only meaningful with a platform picked).
@@ -148,7 +170,7 @@ export default function Browse() {
           </select>
           <select value={filters.studio ?? 'all'} onChange={(e) => set('studio', e.target.value)} aria-label="Estudio o categoría">
             <option value="all">Todos los estudios</option>
-            {(studios.data ?? []).map((s) => <option key={s.slug} value={s.slug}>{s.name}</option>)}
+            {studioOptions.map((s) => <option key={s.slug} value={s.slug}>{s.name}</option>)}
           </select>
           <select value={filters.decade ?? 'all'} onChange={(e) => set('decade', e.target.value)} aria-label="Década">
             <option value="all">Todas las décadas</option>

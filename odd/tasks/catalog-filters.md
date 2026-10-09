@@ -32,7 +32,7 @@ Forecast well under 400 authored changed lines: one slice, strategy `ask-on-risk
 
 ## Tasks
 - [x] F1 — API: `filmCount` / `seriesCount` per studio in `Repository::studios()` and the `Studio` type (`web/src/lib/api.ts`). Route: delegated writer (writer trigger: 2+ non-trivial files with F2).
-- [ ] F2 — Browse dependent studio select: hide category studios `peliculas` and `series`; filter by selected type; clear an incompatible `studio` param on type change. Route: delegated writer.
+- [x] F2 — Browse dependent studio select: hide category studios `peliculas` and `series`; filter by selected type; clear an incompatible `studio` param on type change. Route: delegated writer.
 - [ ] F3 — Remove a card that stops matching the active seen filter after a card action (fade-out, no refetch). Route: delegated writer.
 
 ## Acceptance criteria
@@ -43,5 +43,6 @@ Forecast well under 400 authored changed lines: one slice, strategy `ask-on-risk
 
 ## Progress
 - Created 2026-10-09. Next: F1.
-- F1 done (route: delegated writer). Naming: `movieCount` already means movies + series and Studios grid uses it as "títulos", so it stays the total; new `filmCount` (media_type movie) and `seriesCount` (media_type series) via conditional SUM. Checks: `php -l` 8.2 and php:7.4-cli OK; `npm run build` OK; `Repository::studios()` against local `mml` (mml-mariadb): 16 studios, film + series = total for all (e.g. anime 115/456, disney-xd 0/34, warner 147/0). HTTP `/api/studios` needs a session, not curled. TDD: no runner, no RED/GREEN.
+- F1 done in 4a74d0d (route: delegated writer). Naming: `movieCount` already means movies + series and Studios grid uses it as "títulos", so it stays the total; new `filmCount` (media_type movie) and `seriesCount` (media_type series) via conditional SUM. Checks: `php -l` 8.2 and php:7.4-cli OK; `npm run build` OK; `Repository::studios()` against local `mml` (mml-mariadb): 16 studios, film + series = total for all (e.g. anime 115/456, disney-xd 0/34, warner 147/0). HTTP `/api/studios` needs a session, not curled. TDD: no runner, no RED/GREEN.
+- F2 done (route: delegated writer). `Browse.tsx`: studio options = not (`kind = 'category'` and slug `peliculas`/`series`) and count of the selected type > 0 (`filmCount` / `seriesCount` / total). One rule, `compatible()`, drops a `studio` param the select does not offer: applied inside `set()` (so a type change resets it in the same `replace` update, no extra history) and in an effect for URLs loaded with such a studio (old `peliculas`/`series` links, or a type + studio pair without content), only once studios are loaded. Checks: `npm run build` OK. Expected with local data: "Películas" hides Disney XD; "Series" hides DreamWorks, Universal, Warner, Sony, Blue Sky, Ghibli; Anime stays in both. Browser check not run (needs a session).
 - Engram mirror `odd/catalog-filters/tasks`: pending (host session registration failed on save); resync when available.
