@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { scrollBehavior } from '../lib/motion'
+import { useEffect, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
+import { Check, ChevronDown, ListTree } from 'lucide-react'
+import Popover from './Popover'
 
 export type NavSection = { slug: string; name: string; period?: string; count: number }
 
@@ -12,95 +12,137 @@ type Props = {
   onToggleAll: () => void
 }
 
-/** Height of the sticky header plus the sticky toolbar holding the row: the scrollspy band starts below them. */
+/** Height of the sticky header plus the sticky toolbar holding the picker: the scrollspy line sits under them. */
 const stickyOffset = (el: HTMLElement | null) =>
   (document.querySelector<HTMLElement>('.nav')?.offsetHeight ?? 60) + (el?.closest<HTMLElement>('.sticky-bar')?.offsetHeight ?? 70)
 
-/** Section jump row (inside the sticky studio toolbar): hidden scrollbar, edge fades, desktop arrows, wheel-to-horizontal and scrollspy. */
-export default function SectionNav({ sections, visibleSlugs, allCollapsed, onJump, onToggleAll }: Props) {
-  const row = useRef<HTMLElement>(null)
-  const [edges, setEdges] = useState({ left: false, right: false })
+/**
+ * Scrollspy: the last section (document order) whose top has reached the line under the sticky header and toolbar
+ * (a jumped-to section lands there through its scroll margin); null above the first one, at the top of the page.
+ */
+function useScrollSpy(slugs: string[], ref: RefObject<HTMLElement | null>) {
   const [active, setActive] = useState<string | null>(null)
-
-  const measure = useCallback(() => {
-    const el = row.current
-    if (!el) return
-    const left = el.scrollLeft > 4
-    const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 4
-    setEdges((e) => (e.left === left && e.right === right ? e : { left, right }))
-  }, [])
-
+  const key = slugs.join('|')
   useEffect(() => {
-    const el = row.current
-    if (!el) return
-    measure()
-    const ro = new ResizeObserver(measure)
-    ro.observe(el)
-    // Vertical wheel scrolls the row sideways; at the ends it falls through to the page.
-    const onWheel = (e: WheelEvent) => {
-      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX) || el.scrollWidth <= el.clientWidth) return
-      const atStart = el.scrollLeft <= 0 && e.deltaY < 0
-      const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 1 && e.deltaY > 0
-      if (atStart || atEnd) return
-      e.preventDefault()
-      el.scrollLeft += e.deltaY
+    let frame = 0
+    const update = () => {
+      frame = 0
+      const line = stickyOffset(ref.current) + 24
+      let current: string | null = null
+      for (const slug of slugs) {
+        const el = document.getElementById(`sec-${slug}`)
+        if (!el) continue
+        if (el.getBoundingClientRect().top > line) break
+        current = slug
+      }
+      setActive(current)
     }
-    el.addEventListener('wheel', onWheel, { passive: false })
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(update)
+    }
+    update()
+    window.addEventListener('scroll', schedule, { passive: true })
+    window.addEventListener('resize', schedule)
     return () => {
-      ro.disconnect()
-      el.removeEventListener('wheel', onWheel)
+      cancelAnimationFrame(frame)
+      window.removeEventListener('scroll', schedule)
+      window.removeEventListener('resize', schedule)
     }
-  }, [measure, sections])
-
-  // Scrollspy: the first section (document order) that overlaps the band just under the sticky header.
-  const key = visibleSlugs.join('|')
-  useEffect(() => {
-    const els = visibleSlugs.map((s) => document.getElementById(`sec-${s}`)).filter((e): e is HTMLElement => !!e)
-    if (!els.length) return
-    const inView = new Set<string>()
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const en of entries) {
-          const slug = en.target.id.slice(4)
-          if (en.isIntersecting) inView.add(slug)
-          else inView.delete(slug)
-        }
-        const first = visibleSlugs.find((s) => inView.has(s))
-        if (first) setActive(first)
-      },
-      // The band starts under the sticky header + toolbar.
-      { rootMargin: `-${stickyOffset(row.current)}px 0px -60% 0px` },
-    )
-    els.forEach((e) => io.observe(e))
-    return () => io.disconnect()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key])
+  }, [key, ref])
+  return active
+}
 
-  // Keep the active chip visible inside the row without moving the page.
-  useEffect(() => {
-    const el = row.current
-    const chip = active ? el?.querySelector<HTMLElement>(`[data-slug="${active}"]`) : null
-    if (!el || !chip) return
-    const target = chip.offsetLeft - (el.clientWidth - chip.offsetWidth) / 2
-    el.scrollTo({ left: Math.max(0, target), behavior: scrollBehavior() })
-  }, [active])
-
-  const scrollBy = (dir: 1 | -1) => row.current?.scrollBy({ left: dir * row.current.clientWidth * 0.7, behavior: scrollBehavior() })
+/**
+ * Section picker inside the sticky studio toolbar: a trigger naming the section in view ("Todas las secciones" above
+ * the first) that opens a single-choice listbox of the rendered sections (period and count); picking one jumps to it.
+ * Plus the "Contraer todo / Expandir todo" toggle.
+ */
+export default function SectionNav({ sections, visibleSlugs, allCollapsed, onJump, onToggleAll }: Props) {
+  const [open, setOpen] = useState(false)
+  const trigger = useRef<HTMLButtonElement>(null)
+  const active = useScrollSpy(visibleSlugs, trigger)
+  const visible = new Set(visibleSlugs)
+  const options = sections.filter((s) => visible.has(s.slug))
+  const current = sections.find((s) => s.slug === active)
 
   return (
-    <div className="chips-row">
-      <div className="chips-wrap" data-left={edges.left} data-right={edges.right}>
-        <button type="button" className="chips-arrow left" onClick={() => scrollBy(-1)} aria-label="Secciones anteriores" tabIndex={-1}><ChevronLeft size={16} aria-hidden="true" /></button>
-        <nav className="chips" ref={row} onScroll={measure} aria-label="Ir a la sección">
-          {sections.map((s) => (
-            <button key={s.slug} type="button" data-slug={s.slug} className={`chip ${active === s.slug ? 'on' : ''}`} aria-current={active === s.slug ? 'location' : undefined} onClick={() => onJump(s.slug)} title={s.period}>
-              {s.name} <small>{s.count}</small>
-            </button>
-          ))}
-        </nav>
-        <button type="button" className="chips-arrow right" onClick={() => scrollBy(1)} aria-label="Más secciones" tabIndex={-1}><ChevronRight size={16} aria-hidden="true" /></button>
-      </div>
+    <div className="sec-row">
+      <button
+        ref={trigger} type="button" className="prov-trigger sec-trigger"
+        aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen((o) => !o)} disabled={options.length === 0}
+      >
+        <ListTree size={15} aria-hidden="true" />
+        <span className="prov-trigger-label">{current ? <>Sección: <b>{current.name}</b></> : 'Todas las secciones'}</span>
+        <ChevronDown size={14} aria-hidden="true" />
+      </button>
+      {open && (
+        <Popover
+          anchor={trigger} onClose={() => setOpen(false)} label="Ir a la sección" role={null} width={360}
+          initialFocus={(panel) => panel.querySelector<HTMLElement>('[role="listbox"]')}
+        >
+          <div className="pop-head"><strong id="sec-pop-title">Ir a la sección</strong></div>
+          <SectionList
+            options={options}
+            active={active}
+            onPick={(slug) => {
+              setOpen(false)
+              onJump(slug)
+            }}
+            onClose={() => setOpen(false)}
+          />
+        </Popover>
+      )}
       <button type="button" className="btn btn-quiet btn-sm" aria-expanded={!allCollapsed} onClick={onToggleAll}>{allCollapsed ? 'Expandir todo' : 'Contraer todo'}</button>
     </div>
+  )
+}
+
+/**
+ * Listbox with an active-descendant cursor: arrows, Home/End and PageUp/PageDown move it, Enter or Space picks,
+ * Tab closes; the section in view is the selected option.
+ */
+function SectionList({ options, active, onPick, onClose }: {
+  options: NavSection[]; active: string | null; onPick: (slug: string) => void; onClose: () => void
+}) {
+  const list = useRef<HTMLUListElement>(null)
+  const [cursor, setCursor] = useState(() => Math.max(0, options.findIndex((o) => o.slug === active)))
+  const at = Math.min(cursor, options.length - 1)
+
+  useEffect(() => {
+    list.current?.querySelector<HTMLElement>(`[data-i="${at}"]`)?.scrollIntoView({ block: 'nearest' })
+  }, [at])
+
+  const onKey = (e: KeyboardEvent<HTMLUListElement>) => {
+    const last = options.length - 1
+    const move: Record<string, number> = { ArrowDown: at + 1, ArrowUp: at - 1, Home: 0, End: last, PageDown: at + 5, PageUp: at - 5 }
+    if (e.key in move) {
+      e.preventDefault()
+      setCursor(Math.min(last, Math.max(0, move[e.key])))
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      if (options[at]) onPick(options[at].slug)
+    } else if (e.key === 'Tab') {
+      onClose()
+    }
+  }
+
+  return (
+    <ul
+      ref={list} className="sec-list pop-scroll" role="listbox" tabIndex={0} aria-labelledby="sec-pop-title"
+      aria-activedescendant={options[at] ? `sec-opt-${options[at].slug}` : undefined} onKeyDown={onKey}
+    >
+      {options.map((o, i) => (
+        <li
+          key={o.slug} id={`sec-opt-${o.slug}`} data-i={i} role="option" aria-selected={o.slug === active}
+          className={`sec-opt ${i === at ? 'is-cursor' : ''}`}
+          onClick={() => onPick(o.slug)} onMouseMove={() => i !== at && setCursor(i)}
+        >
+          {o.slug === active ? <Check size={14} strokeWidth={3} aria-hidden="true" /> : <span aria-hidden="true" />}
+          <span className="sec-name">{o.name}{o.period && <em>{o.period}</em>}</span>
+          <small aria-label={`${o.count} ${o.count === 1 ? 'título' : 'títulos'}`}>{o.count}</small>
+        </li>
+      ))}
+    </ul>
   )
 }

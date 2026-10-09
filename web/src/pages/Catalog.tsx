@@ -300,9 +300,6 @@ function CatalogView({ slug }: { slug: string }) {
               <ProviderPicker options={providerOptions} selected={provSel} onChange={pickProviders} ptype={ptype} onPType={setPtype} />
             )}
           </div>
-          <div className="bar-search">
-            <input type="search" placeholder={`Buscar en ${studioName}`} value={query} onChange={(e) => setQuery(e.target.value)} aria-label={`Buscar por título en ${studioName}`} enterKeyHint="search" />
-          </div>
           {tab !== 'sagas' && grouped && (
             <SectionNav
               sections={viewSections.map((s) => ({ slug: s.slug, name: s.name, period: s.period, count: s.movies.length }))}
@@ -312,6 +309,9 @@ function CatalogView({ slug }: { slug: string }) {
               onToggleAll={() => setCollapsed(allCollapsed ? new Set() : new Set(viewSections.map((s) => s.slug)))}
             />
           )}
+          <div className="bar-search">
+            <input type="search" placeholder={`Buscar en ${studioName}`} value={query} onChange={(e) => setQuery(e.target.value)} aria-label={`Buscar por título en ${studioName}`} enterKeyHint="search" />
+          </div>
         </div>
         <span className="bar-progress" style={{ width: `${pct}%` }} aria-hidden="true" />
       </StickyBar>
